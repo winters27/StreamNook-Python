@@ -9,7 +9,7 @@ This guide provides a one-click PowerShell installer to quickly reinstall and co
 ### Quick Start
 
 1. **Download the installer:**
-   - Save a copy of `My-Streamlink-Installer.ps1` to your PC.
+   - Save a copy of `Streamlink-Installer.ps1` to your PC.
 
 2. **Run it:**
    - Right-click the `.ps1` file and select **“Run with PowerShell.”**
