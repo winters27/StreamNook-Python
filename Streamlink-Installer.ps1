@@ -3,7 +3,7 @@
 # ===
 # === A personal GUI wizard to walk through the manual installation
 # === and configuration of the full Streamlink + MPV suite.
-# === (v4.1 - Fixed ParserError typo)
+# === (v4.3 - Fixed Step 1 scrollbar bug)
 # ===================================================================
 
 # --- Load GUI Assemblies ---
@@ -309,6 +309,7 @@ $textInstructions.BackColor = [System.Drawing.Color]::FromArgb(22, 22, 25)
 $textInstructions.ForeColor = [System.Drawing.Color]::FromArgb(200, 200, 210)
 $textInstructions.SelectionIndent = 20
 $textInstructions.SelectionRightIndent = 20
+$textInstructions.ScrollBars = [System.Windows.Forms.RichTextBoxScrollBars]::None # <-- FIX 1: Default to None
 
 $panelInstructions.Controls.Add($textInstructions)
 
@@ -374,10 +375,17 @@ function Load-Step {
   $textInstructions.Text = $data.Text
   $labelStep.Text = "Step $step of $global:maxSteps"
 
+  # FIX 2: Reset scrollbar to None by default for all steps
+  $textInstructions.ScrollBars = [System.Windows.Forms.RichTextBoxScrollBars]::None
+
   # Set subtitle based on step
   switch ($step) {
     1  { $labelSubtitle.Text = "Let's get your Streamlink + MPV setup configured" }
-    2  { $labelSubtitle.Text = "The lightweight, high-performance video player" }
+    2  {
+      $labelSubtitle.Text = "The lightweight, high-performance video player"
+      # FIX 2: Enable scrollbar ONLY for this step
+      $textInstructions.ScrollBars = [System.Windows.Forms.RichTextBoxScrollBars]::Vertical
+    }
     3  { $labelSubtitle.Text = "Set up high-quality playback" }
     4  { $labelSubtitle.Text = "Core streaming engine" }
     5  { $labelSubtitle.Text = "User-friendly interface for Twitch" }
@@ -414,60 +422,60 @@ function Load-Step {
   switch ($step) {
     2 { # MPV
       $buttonDownload.Visible = $true
-      $buttonDownload.Text = "📁 Open Download Page"
+      $buttonDownload.Text = "Open Download Page"
       $buttonDownload.Tag = "open_mpv_release_page"
       $buttonDownload.Location = New-Object System.Drawing.Point(210, 10) # Center
     }
     3 { # Configure MPV
       $buttonDownload.Visible = $true
-      $buttonDownload.Text = "📁 Open Config Folder"
+      $buttonDownload.Text = "Open Config Folder"
       $buttonDownload.Tag = "open_mpv_conf_folder"
 
       $buttonAction.Visible = $true
-      $buttonAction.Text = "📋 Copy Config"
+      $buttonAction.Text = "Copy Config"
       $buttonAction.Tag = "copy_mpv_conf"
     }
     4 { # Streamlink
       $buttonDownload.Visible = $true
-      $buttonDownload.Text = "🡇 Download Streamlink"
+      $buttonDownload.Text = "Download Streamlink"
       $buttonDownload.Tag = "streamlink"
       $buttonDownload.Location = New-Object System.Drawing.Point(210, 10) # Center
     }
     5 { # Streamlink GUI
       $buttonDownload.Visible = $true
-      $buttonDownload.Text = "🡇 Download GUI"
+      $buttonDownload.Text = "Download GUI"
       $buttonDownload.Tag = "gui"
       $buttonDownload.Location = New-Object System.Drawing.Point(210, 10) # Center
     }
     6 { # Chatterino
       $buttonDownload.Visible = $true
-      $buttonDownload.Text = "🡇 Download Chatterino"
+      $buttonDownload.Text = "Download Chatterino"
       $buttonDownload.Tag = "chatterino"
       $buttonDownload.Location = New-Object System.Drawing.Point(210, 10) # Center
     }
     7 { # TTVLOL
       $buttonDownload.Visible = $true
-      $buttonDownload.Text = "🡇 Download Plugin"
+      $buttonDownload.Text = "Download Plugin"
       $buttonDownload.Tag = "ttvlol"
 
       $buttonAction.Visible = $true
-      $buttonAction.Text = "📁 Open Folder"
+      $buttonAction.Text = "Open Folder"
       $buttonAction.Tag = "open_folder"
     }
     8 { # Configure Player
       $buttonAction.Visible = $true
-      $buttonAction.Text = "📋 Copy Player Args"
+      $buttonAction.Text = "Copy Player Args"
       $buttonAction.Tag = "copy_player_args"
       $buttonAction.Location = New-Object System.Drawing.Point(210, 10) # Center
     }
     9 { # Configure Streaming
       $buttonAction.Visible = $true
-      $buttonAction.Text = "📋 Copy Stream Args"
+      $buttonAction.Text = "Copy Stream Args"
       $buttonAction.Tag = "copy_stream_args"
       $buttonAction.Location = New-Object System.Drawing.Point(210, 10) # Center
     }
     10 { # Finish
-      $buttonNext.Text = "Finish ✓"
+      $buttonNext.Text = "Finish"
       $buttonNext.BackColor = [System.Drawing.Color]::FromArgb(40, 80, 60)
       $buttonBack.Enabled = $false
       $buttonBack.ForeColor = [System.Drawing.Color]::FromArgb(80, 80, 85)
@@ -597,7 +605,7 @@ $buttonDownload_Click = {
                 "Download failed: $_`n`nOpening download page instead...",
                 "Download Error",
                 "OK",
-                "Warning" # <--- THIS WAS THE FIX
+                "Warning"
               )
               Start-Process $downloadUrl
             }
@@ -657,7 +665,7 @@ cscale=ewa_lanczossharp
 deband=yes
 
 # --- Hardware Decoding ---
-hwdec=d3D11va
+hwdec=d3D1Remember 11va
 gpu-api=d3D11
 "@
       Set-Clipboard -Value $conf.Replace("`r`n", "`n") # Ensure Unix line endings
