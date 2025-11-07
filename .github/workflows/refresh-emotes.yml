@@ -35,7 +35,6 @@ jobs:
             --per-page 72 \
             --gql-url https://api.7tv.app/v4/gql \
             ${BEARER:+--bearer "$BEARER"} \
-            --exact \
             --no-tty
 
       - name: Commit changes (if any)
