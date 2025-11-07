@@ -1,0 +1,51 @@
+name: Refresh 7TV Trending Emotes (Monthly)
+
+on:
+  schedule:
+    # 09:00 UTC on the 1st of every month
+    - cron: "0 9 1 * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Ensure data folder exists
+        run: mkdir -p data
+
+      - name: Run scraper
+        env:
+          # Optional: add this secret in Settings > Secrets and variables > Actions
+          BEARER: ${{ secrets.SEVTV_BEARER }}
+        run: |
+          python scripts/7tv_trending_monthly.py \
+            --out data/trending_emotes.txt \
+            --per-page 72 \
+            --gql-url https://api.7tv.app/v4/gql \
+            ${BEARER:+--bearer "$BEARER"} \
+            --exact \
+            --no-tty
+
+      - name: Commit changes (if any)
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/trending_emotes.txt
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore: monthly refresh of 7TV trending list"
+            git push
+          fi
