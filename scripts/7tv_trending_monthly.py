@@ -1,26 +1,22 @@
 #!/usr/bin/env python3
-# 7tv_trending_monthly.py — v4 GraphQL → trending emote URLs → text file with live progress
+# 7tv_trending_monthly.py — v4 GraphQL → trending emote URLs (AVIF-only) → text file with live progress
 #
 # Examples:
-#   python 7tv_trending_monthly.py --out trending.txt --debug
-#   python 7tv_trending_monthly.py --out trending.txt --status-file trending.status.json
-#   python 7tv_trending_monthly.py --exact --stream
+#   python 7tv_trending_monthly.py --out data/trending_emotes.txt --status-file data/trending.status.json
 #   python 7tv_trending_monthly.py --follow 60
 #
 # Notes:
 # - Queries https://api.7tv.app/v4/gql (override with --gql-url)
 # - Filters animated=true, sorts TRENDING_MONTHLY, paginates page=1..pageCount
-# - Writes incrementally after each page so your app can read as it grows
+# - **AVIF only**: we always write https://cdn.7tv.app/emote/<id>/3x.avif
+# - Cleans existing output file: converts any non-AVIF lines to the AVIF form
 
-import json, sys, time, argparse, urllib.request, urllib.error, math, shutil, signal
+import json, sys, time, argparse, urllib.request, urllib.error, math, shutil
 from pathlib import Path
-from typing import List, Optional, Set, Tuple
+from typing import List, Optional, Set
 
 GQL_URL_DEFAULT = "https://api.7tv.app/v4/gql"
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0"
-
-FORMAT_PREF: List[str] = ["webp", "avif", "gif"]
-SCALE_PREF: List[str] = ["3x", "4x", "2x", "1x"]
 
 GQL_QUERY = """
 query EmoteSearch(
@@ -40,10 +36,7 @@ query EmoteSearch(
       page: $page
       perPage: $perPage
     ) {
-      items {
-        id
-        images { url mime scale frameCount }
-      }
+      items { id }
       totalCount
       pageCount
     }
@@ -72,34 +65,43 @@ def _post_json(url: str, payload: dict, timeout: float, bearer: Optional[str]) -
         body = r.read()
         return json.loads(body.decode("utf-8"))
 
-# -------------- selection logic --------------
-
-def _norm_scale(v) -> str:
-    if v is None: return ""
-    if isinstance(v, int): return f"{v}x"
-    s = str(v).strip().lower()
-    if s.endswith("x"): return s
-    if s.isdigit(): return f"{s}x"
-    return s
-
-def _pick_best_url(images: List[dict]) -> Optional[str]:
-    animated = [im for im in images if (im.get("frameCount") or 0) > 1]
-    candidates = animated if animated else images
-    ranked: List[Tuple[int,int,str]] = []
-    for im in candidates:
-        url = im.get("url")
-        if not url: continue
-        mime = (im.get("mime") or "").lower()
-        fmt = mime.split("/")[-1] if "/" in mime else (url.rsplit(".",1)[-1].lower() if "." in url else "")
-        scale = _norm_scale(im.get("scale"))
-        f_rank = FORMAT_PREF.index(fmt) if fmt in FORMAT_PREF else 99
-        s_rank = SCALE_PREF.index(scale) if scale in SCALE_PREF else 99
-        ranked.append((f_rank, s_rank, url))
-    if not ranked: return None
-    ranked.sort(key=lambda t: (t[0], t[1]))
-    return ranked[0][2]
-
 # -------------- I/O --------------
+
+def _avif_from_any(url: str) -> Optional[str]:
+    # Build canonical AVIF URL from any 7tv CDN emote URL by extracting the ID
+    # Falls back to returning None if no ID is found.
+    import re
+    m = re.search(r"/emote/([A-Za-z0-9]+)/", url)
+    if not m:
+        return None
+    eid = m.group(1)
+    return f"https://cdn.7tv.app/emote/{eid}/3x.avif"
+
+def sanitize_existing_file(path: Path) -> None:
+    """Rewrite the output file to AVIF-only, converting webp/gif/etc. to AVIF."""
+    if not path.exists():
+        return
+    try:
+        lines = [ln.strip() for ln in path.read_text(encoding="utf-8").splitlines()]
+    except Exception:
+        return
+    cleaned: list[str] = []
+    seen: Set[str] = set()
+    for ln in lines:
+        if not ln:
+            continue
+        if ".avif" in ln.lower():
+            avif = ln
+        else:
+            avif = _avif_from_any(ln)
+            if avif is None:
+                # If we can't extract an id, drop the line
+                continue
+        if avif not in seen:
+            seen.add(avif)
+            cleaned.append(avif)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(cleaned) + ("\n" if cleaned else ""), encoding="utf-8")
 
 def load_existing_lines(path: Path) -> Set[str]:
     if not path.exists():
@@ -135,8 +137,9 @@ def _progress_bar(frac: float, width: int) -> str:
     return "█" * fill + "░" * (width - fill)
 
 def print_progress(tty: bool, page: int, page_count: int, total_urls: int, written: int, start_ts: float):
+    import shutil as _shutil
     elapsed = time.time() - start_ts
-    cols = shutil.get_terminal_size(fallback=(80, 20)).columns
+    cols = _shutil.get_terminal_size(fallback=(80, 20)).columns
     bar_w = max(10, min(40, cols - 50))
     frac = (page-1) / page_count if page_count else 0.0
     bar = _progress_bar(frac, bar_w)
@@ -147,14 +150,13 @@ def print_progress(tty: bool, page: int, page_count: int, total_urls: int, writt
     else:
         print(msg)
 
-# -------------- core fetch --------------
+# -------------- core fetch (AVIF-only) --------------
 
 def fetch_trending_urls_incremental(
     *,
     gql_url: str,
     timeout: float,
     per_page: int,
-    exact_pattern: bool,
     bearer: Optional[str],
     stream: bool,
     status_path: Optional[Path],
@@ -162,6 +164,10 @@ def fetch_trending_urls_incremental(
     tty: bool,
 ) -> None:
     start_ts = time.time()
+
+    # Clean existing file to AVIF-only before loading dedupe set
+    sanitize_existing_file(out_path)
+
     existing = load_existing_lines(out_path)
     written_total = 0
     urls_seen_total = 0
@@ -207,16 +213,10 @@ def fetch_trending_urls_incremental(
 
             add_now: List[str] = []
             for it in items:
-                if exact_pattern:
-                    eid = it.get("id")
-                    if eid:
-                        url = f"https://cdn.7tv.app/emote/{eid}/3x.avif"
-                    else:
-                        continue
-                else:
-                    url = _pick_best_url(it.get("images") or [])
-                    if not url:
-                        continue
+                eid = it.get("id")
+                if not eid:
+                    continue
+                url = f"https://cdn.7tv.app/emote/{eid}/3x.avif"  # AVIF-only canonical
                 urls_seen_total += 1
                 if url not in existing:
                     add_now.append(url)
@@ -245,13 +245,10 @@ def fetch_trending_urls_incremental(
             page += 1
 
     finally:
-        # final line so the prompt isn't stuck mid-progress
         if sys.stdout and sys.stdout.isatty():
             sys.stdout.write("\n")
         elapsed = time.time() - start_ts
-        print(f"[✓] pages {page- (0 if stopped else 0)}/{page_count or '?'}  "
-              f"urls {urls_seen_total}  wrote +{written_total}  "
-              f"in {elapsed:.1f}s  ({_fmt_rate(urls_seen_total, elapsed)})")
+        print(f"[✓] pages {page}/{page_count or '?'}  urls {urls_seen_total}  wrote +{written_total}  in {elapsed:.1f}s  ({_fmt_rate(urls_seen_total, elapsed)})")
         write_status(status_path, {
             "done": True,
             "page": page,
@@ -267,12 +264,11 @@ def fetch_trending_urls_incremental(
 # -------------- CLI --------------
 
 def main():
-    ap = argparse.ArgumentParser("7TV monthly trending (v4 GraphQL) → text file, with live progress.")
+    ap = argparse.ArgumentParser("7TV monthly trending (v4 GraphQL) → AVIF-only text file, with live progress.")
     ap.add_argument("--out", default="trending_emotes.txt", help="Output (one URL per line).")
     ap.add_argument("--per-page", type=int, default=72, help="Pagination size.")
     ap.add_argument("--timeout", type=float, default=12.0, help="HTTP timeout (s).")
     ap.add_argument("--follow", type=int, default=0, help="Re-run every N minutes (0 = once).")
-    ap.add_argument("--exact", action="store_true", help="Write https://cdn.7tv.app/emote/<id>/3x.avif")
     ap.add_argument("--gql-url", default=GQL_URL_DEFAULT, help="GraphQL endpoint.")
     ap.add_argument("--bearer", default=None, help="Bearer token (optional).")
     ap.add_argument("--stream", action="store_true", help="Print each URL as it’s discovered.")
@@ -289,7 +285,6 @@ def main():
             gql_url=args.gql_url,
             timeout=args.timeout,
             per_page=args.per_page,
-            exact_pattern=bool(args.exact),
             bearer=args.bearer,
             stream=bool(args.stream),
             status_path=status_path,
