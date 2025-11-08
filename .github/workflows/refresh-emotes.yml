@@ -30,7 +30,7 @@ jobs:
           # Optional: add this secret in Settings > Secrets and variables > Actions
           BEARER: ${{ secrets.SEVTV_BEARER }}
         run: |
-          python 7tv_trending_monthly.py \
+          python scripts/7tv_trending_monthly.py \
             --out data/trending_emotes.txt \
             --per-page 72 \
             --gql-url https://api.7tv.app/v4/gql \
