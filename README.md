@@ -4,7 +4,7 @@
 
 # Stream Nook
 
-Stream Nook is a lightweight, integrated application designed to provide a seamless and enhanced streaming experience. It combines the power of `mpv` for video playback, `Streamlink` for reliable stream fetching, and `Chatterino` for a feature-rich chat client, all within a single, cohesive environment.
+Stream Nook: Because sometimes, even when you're deep into a solo gaming session, you just need a little background chatter to feel less like you're talking to yourself. But let's be real, having a browser open to Twitch is a resource hog that your PC (and your sanity) can't always handle. Enter Stream Nook – the lightweight, all-in-one application that brings the cozy companionship of Twitch streams directly to your desktop, without turning your computer into a jet engine. It seamlessly integrates `mpv` for buttery-smooth video, `Streamlink` for rock-solid stream fetching, and `Chatterino` for a chat experience so rich, you'll forget you're not actually there. Get all the vibes, none of the lag.
 
 ## Features
 
@@ -120,3 +120,17 @@ If the PowerShell installer fails for any reason, you can set up everything manu
 -   The PowerShell installer automatically fetches the newest versions from GitHub — no manual updates needed.
 -   If Stream Nook fails to detect Streamlink, ensure it’s in your PATH or reinstall via the wizard.
 -   You can rerun the installer anytime to repair or refresh the setup.
+
+---
+
+## Credits
+
+Stream Nook leverages the power of several open-source projects and libraries to deliver its seamless streaming experience:
+
+*   **[mpv](https://github.com/mpv-player/mpv)**: A free, open-source, and cross-platform media player.
+*   **[Streamlink](https://github.com/streamlink/streamlink)**: A CLI utility that pipes video streams from various services to a video player.
+*   **[Chatterino](https://github.com/Chatterino/chatterino2)**: A chat client for Twitch, designed for power users.
+*   **[Discord-RPC](https://github.com/Senophyx/Discord-RPC)**: A Python library for Discord Rich Presence integration.
+*   **[psutil](https://github.com/giampaolo/psutil)**: A cross-platform library for retrieving information on running processes and system utilization (CPU, memory, disks, network, sensors).
+*   **[PySide6](https://github.com/qt/pyside-setup)**: The official Python bindings for the Qt cross-platform application and UI framework.
+*   **[shiboken6](https://github.com/qt/shiboken-setup)**: A binding generator tool used to create Python bindings for C++ libraries, specifically for PySide6.
