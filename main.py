@@ -178,7 +178,7 @@ DEFAULTS = {
     "hide_search_bar_on_startup": True,
     "discord_rpc_enabled": True,
 }
-TWITCH_CLIENT_ID_HARDCODED = "1qgws7yzcp21g5ledlzffw3lmqdvie" # Hardcoded Twitch Client ID
+TWITCH_CLIENT_ID = "1qgws7yzcp21g5ledlzffw3lmqdvie" # Hardcoded Twitch Client ID
 
 TWITCH_SCOPES = [
     "user:read:follows",
@@ -3077,7 +3077,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.menu_bar.hide_loading_indicator()
 
     def login_with_twitch(self):
-        cid = TWITCH_CLIENT_ID_HARDCODED
+        cid = TWITCH_CLIENT_ID
         if not cid:
             QtWidgets.QMessageBox.information(self, "Client-ID needed", "Twitch Client-ID is missing.")
             return
@@ -3117,7 +3117,7 @@ class MainWindow(QtWidgets.QMainWindow):
         Returns True if successful, False otherwise.
         """
         refresh_token = account_data.get("refreshToken")
-        client_id = account_data.get("clientID", TWITCH_CLIENT_ID_HARDCODED)
+        client_id = account_data.get("clientID", TWITCH_CLIENT_ID)
 
         if not refresh_token:
             self._log("No refresh token available. Re-authentication required.")
@@ -3195,7 +3195,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.settings["accounts"][f"uid{user_id}"] = {
             "username": display_name or username,
             "userID": user_id,
-            "clientID": TWITCH_CLIENT_ID_HARDCODED,
+            "clientID": TWITCH_CLIENT_ID,
             "oauthToken": access_token,
             "refreshToken": refresh_token,
             "tokenExpiry": token_expiry,
