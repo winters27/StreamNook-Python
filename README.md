@@ -12,6 +12,7 @@ Stream Nook is a lightweight, integrated application designed to provide a seaml
 *   **Robust Stream Fetching:** Powered by `Streamlink`, ensuring stable and consistent access to your favorite streams.
 *   **Integrated Chat Experience:** Full integration with `Chatterino`, providing advanced chat features, custom emotes, and a responsive interface.
 *   **Discord Rich Presence:** Share your current streaming activity with friends through Discord Rich Presence integration, displaying what you're watching directly on your Discord profile.
+*   **Twitch Live Follows:** Log into your Twitch account to see an easy interface of who you follow on Twitch who is live, complete with stream previews.
 
 ---
 
@@ -25,6 +26,9 @@ Stream Nook is a lightweight, integrated application designed to provide a seaml
 </p>
 <p align="center">
   <img src="images/ui3.png" alt="Stream Nook UI Screenshot 3"/>
+</p>
+<p align="center">
+  <img src="images/live.png" alt="Stream Nook Live Follows Screenshot"/>
 </p>
 
 ---
