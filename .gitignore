@@ -1,0 +1,16 @@
+# Compiled files and build artifacts
+dist/
+build/
+build_version.ps1
+documentation.md
+StreamNook.spec
+version_info.txt
+
+# User-specific data and caches
+data/thumbnails/*
+data/profile_pictures/*
+data/discord_detectables_cache.json
+data/settings.json
+
+# Python specific
+__pycache__/
