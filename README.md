@@ -4,7 +4,7 @@
 
 # Stream Nook
 
-Stream Nook is a lightweight, integrated application designed to provide a seamless and enhanced streaming experience. It combines the power of `mpv` for video playback, `Streamlink` for reliable stream fetching, and `Chatterino` for a feature-rich chat client, all within a single, cohesive environment.
+Stream Nook is a lightweight, integrated application designed to provide a seamless and enhanced stream-watching experience for Twitch. It combines the power of `mpv` for video playback, `Streamlink` for reliable stream fetching, and `Chatterino` for a feature-rich chat client, all within a single, cohesive environment.
 
 ## Features
 
