@@ -29,9 +29,9 @@ Stream Nook is a lightweight, integrated application designed to provide a seaml
 
 ---
 
-# My Personal Streamlink Setup Guide
+# Stream Nook and Dependencies Setup Guide
 
-This guide provides a one-click PowerShell installer to quickly reinstall and configure my complete Streamlink + MPC-HC + Streamlink Twitch GUI + Chatterino setup from scratch.
+This guide provides a one-click PowerShell installer to quickly set up Stream Nook and its essential dependencies (Streamlink, mpv, and Chatterino) from scratch.
 
 ---
 
@@ -40,7 +40,7 @@ This guide provides a one-click PowerShell installer to quickly reinstall and co
 ### Quick Start
 
 1.  **Download the installer:**
-    -   Save a copy of `Streamlink-Installer.ps1` to your PC.
+    -   Save a copy of `StreamNook-Installer.ps1` to your PC.
 
 2.  **Run it:**
     -   Right-click the `.ps1` file and select **“Run with PowerShell.”**
@@ -48,13 +48,13 @@ This guide provides a one-click PowerShell installer to quickly reinstall and co
 
 3.  **What the wizard does:**
     -   Automatically downloads the **latest** releases of:
-        -   **MPC-HC** (Media Player Classic)
+        -   **mpv** (Video Player)
         -   **Streamlink**
         -   **Chatterino (7TV Edition)**
         -   **TTVLOL plugin**
         -   **Stream Nook**
     -   Guides you through configuration, including:
-        -   Setting MPC-HC as the video player.
+        -   Setting mpv as the video player.
         -   Adding Streamlink arguments.
         -   Enabling ad-free Twitch playback.
 
@@ -68,7 +68,7 @@ This guide provides a one-click PowerShell installer to quickly reinstall and co
 
 | Component | Repository | Purpose |
 | :--- | :--- | :--- |
-| **MPC-HC** | [clsid2/mpc-hc](https://github.com/clsid2/mpc-hc/releases) | The media player used by Streamlink. |
+| **mpv** | [shinchiro/mpv-winbuild-cmake](https://github.com/shinchiro/mpv-winbuild-cmake/releases/latest) | The media player used by Streamlink. |
 | **Streamlink** | [streamlink/windows-builds](https://github.com/streamlink/windows-builds/releases) | The backend CLI that pipes Twitch streams to the player. |
 | **Stream Nook** | [winters27/StreamNook](https://github.com/winters27/StreamNook/releases/latest) | The integrated application for a seamless streaming experience. |
 | **TTVLOL Plugin** | [2bc4/streamlink-ttvlol](https://github.com/2bc4/streamlink-ttvlol/releases) | Removes Twitch ads by routing through custom proxies. |
@@ -82,9 +82,9 @@ If the PowerShell installer fails for any reason, you can set up everything manu
 
 ### Step A — Install Software
 
-1.  **MPC-HC:**
-    Download the latest `MPC-HC...x64.exe` and install to
-    `C:\Program Files\MPC-HC`
+1.  **mpv:**
+    Download the latest `mpv-x86_64-gcc-....7z` from the [releases page](https://github.com/shinchiro/mpv-winbuild-cmake/releases/latest) and extract to
+    `C:\Program Files\mpv` (The final path to the player should be `C:\Program Files\mpv\mpv.exe`)
 
 2.  **Streamlink:**
     Download the latest `streamlink-...-x86_64.exe` and install with default options.
