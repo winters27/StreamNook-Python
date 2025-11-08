@@ -1,0 +1,4 @@
+psutil
+PySide6
+shiboken6
+discord-rpc
