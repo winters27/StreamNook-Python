@@ -4,11 +4,9 @@
 
 # Stream Nook
 
-<<<<<<< HEAD
 Stream Nook: Because sometimes, even when you're deep into a solo gaming session, you just need a little background chatter to feel less like you're talking to yourself. But let's be real, having a browser open to Twitch is a resource hog that your PC (and your sanity) can't always handle. Enter Stream Nook – the lightweight, all-in-one application that brings the cozy companionship of Twitch streams directly to your desktop, without turning your computer into a jet engine. It seamlessly integrates `mpv` for buttery-smooth video, `Streamlink` for rock-solid stream fetching, and `Chatterino` for a chat experience so rich, you'll forget you're not actually there. Get all the vibes, none of the lag.
-=======
-Stream Nook is a lightweight, integrated application designed to provide a seamless and enhanced stream-watching experience for Twitch. It combines the power of `mpv` for video playback, `Streamlink` for reliable stream fetching, and `Chatterino` for a feature-rich chat client, all within a single, cohesive environment.
->>>>>>> 477cbfa743ceab67a8c000ac59ebc525f248786b
+
+---
 
 ## Features
 
