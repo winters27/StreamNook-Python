@@ -22,10 +22,10 @@ $global:urls = @{
     Repo    = "streamlink/windows-builds"
     Pattern = "streamlink*-x86_64.exe" # matches streamlink-7.6.0-1-py313-x86_64.exe
   }
-  'gui' = @{
+  'streamnook' = @{
     Type    = "github-latest"
-    Repo    = "streamlink/streamlink-twitch-gui"
-    Pattern = "streamlink-twitch-gui*-win64*-installer.exe" # matches ...win64-installer.exe
+    Repo    = "winters27/StreamNook"
+    Pattern = "*StreamNook.exe" # matches StreamNook.exe
   }
   'chatterino' = @{
     Type    = "github-latest"
@@ -150,28 +150,28 @@ $global:stepInstructions = @{
     Text  = "1. Click the 'Download' button below to automatically download the latest version.`n`n2. Run the installer and use all default options.`n`n3. Click 'Next' when done."
   }
   5 = @{
-    Title = "Step 4: Install Streamlink Twitch GUI"
-    Text  = "1. Click the 'Download' button below to automatically download the latest version.`n`n2. Run the installer.`n`n3. **IMPORTANT:** After installing, run the Streamlink Twitch GUI **ONCE** and then close it. This creates the settings file we need.`n`n4. Click 'Next' when done."
-  }
-  6 = @{
-    Title = "Step 5: Install Chatterino (7TV)"
+    Title = "Step 4: Install Chatterino (7TV)"
     Text  = "1. Click the 'Download' button below to automatically download the latest version.`n`n2. Run the installer.`n`n3. Click 'Next' when done."
   }
-  7 = @{
-    Title = "Step 6: Install TTVLOL Plugin"
+  6 = @{
+    Title = "Step 5: Install TTVLOL Plugin"
     Text  = "1. Click 'Download Plugin' to automatically download twitch.py.`n`n2. Click 'Open Folder'. This opens %APPDATA%\streamlink\ with the plugins folder already created.`n`n3. Move the downloaded twitch.py file into the plugins folder.`n`nFinal path: ...streamlink\plugins\twitch.py"
   }
+  7 = @{
+    Title = "Step 6: Install Stream Nook"
+    Text  = "1. Click the 'Download' button below to automatically download the latest version of Stream Nook.`n`n2. Run the installer.`n`n3. Click 'Next' when done."
+  }
   8 = @{
-    Title = "Step 7: Configure Player Path"
-    Text  = "Open Streamlink Twitch GUI and go to Settings (gear icon).`n`n1. Go to the **Player** tab.`n`n2. For **'Player path'**, set it to where you extracted MPV:`n`n`C:\Program Files\mpv\mpv.exe` (or your custom path)`n`n3. For **'Player arguments'**, click the 'Copy Args' button below and paste the text in the box."
+    Title = "Step 7: Configure Stream Nook"
+    Text  = "Stream Nook should automatically detect and use the installed components (MPV, Streamlink, Chatterino).`n`nIf you need to adjust specific settings for MPV or Streamlink, please refer to their respective documentation.`n`nClick 'Next' when done."
   }
   9 = @{
-    Title = "Step 8: Configure Streaming (Ads)"
-    Text  = "In the same GUI Settings window:`n`n1. Go to the **Main** tab.`n`n2. Check the box for **'Enable advanced settings and features'**.`n`n3. Go to the **Streaming** tab.`n`n4. In the **'Custom parameters'** box, click the 'Copy Args' button below and paste the text in the box."
+    Title = "Step 8: Final Checks"
+    Text  = "Ensure all components are installed and Stream Nook is running correctly.`n`nIf you encounter any issues, please refer to the Stream Nook documentation or the manual setup guide in the README.`n`nClick 'Next' when done."
   }
   10 = @{
     Title = "All Done!"
-    Text  = "Your setup is complete. All applications are installed and configured.`n`nYou can now use the Streamlink Twitch GUI.`n`nClick 'Finish' to exit."
+    Text  = "Your setup is complete. All applications are installed and configured.`n`nYou can now launch Stream Nook and enjoy your enhanced streaming experience.`n`nClick 'Finish' to exit."
   }
 }
 
@@ -388,11 +388,11 @@ function Load-Step {
     }
     3  { $labelSubtitle.Text = "Set up high-quality playback" }
     4  { $labelSubtitle.Text = "Core streaming engine" }
-    5  { $labelSubtitle.Text = "User-friendly interface for Twitch" }
-    6  { $labelSubtitle.Text = "Enhanced chat with 7TV emotes" }
-    7  { $labelSubtitle.Text = "Ad-blocking plugin for Twitch" }
-    8  { $labelSubtitle.Text = "Connect MPV to Streamlink" }
-    9  { $labelSubtitle.Text = "Enable ad-free streaming" }
+    5  { $labelSubtitle.Text = "Enhanced chat with 7TV emotes" }
+    6  { $labelSubtitle.Text = "Ad-blocking plugin for Twitch" }
+    7  { $labelSubtitle.Text = "The integrated application for a seamless streaming experience" }
+    8  { $labelSubtitle.Text = "Stream Nook handles the integration" }
+    9  { $labelSubtitle.Text = "Verify your setup" }
     10 { $labelSubtitle.Text = "Setup complete!" }
   }
 
@@ -441,19 +441,13 @@ function Load-Step {
       $buttonDownload.Tag = "streamlink"
       $buttonDownload.Location = New-Object System.Drawing.Point(210, 10) # Center
     }
-    5 { # Streamlink GUI
-      $buttonDownload.Visible = $true
-      $buttonDownload.Text = "Download GUI"
-      $buttonDownload.Tag = "gui"
-      $buttonDownload.Location = New-Object System.Drawing.Point(210, 10) # Center
-    }
-    6 { # Chatterino
+    5 { # Chatterino
       $buttonDownload.Visible = $true
       $buttonDownload.Text = "Download Chatterino"
       $buttonDownload.Tag = "chatterino"
       $buttonDownload.Location = New-Object System.Drawing.Point(210, 10) # Center
     }
-    7 { # TTVLOL
+    6 { # TTVLOL
       $buttonDownload.Visible = $true
       $buttonDownload.Text = "Download Plugin"
       $buttonDownload.Tag = "ttvlol"
@@ -462,17 +456,15 @@ function Load-Step {
       $buttonAction.Text = "Open Folder"
       $buttonAction.Tag = "open_folder"
     }
-    8 { # Configure Player
-      $buttonAction.Visible = $true
-      $buttonAction.Text = "Copy Player Args"
-      $buttonAction.Tag = "copy_player_args"
-      $buttonAction.Location = New-Object System.Drawing.Point(210, 10) # Center
+    7 { # Stream Nook
+      $buttonDownload.Visible = $true
+      $buttonDownload.Text = "Download Stream Nook"
+      $buttonDownload.Tag = "streamnook"
+      $buttonDownload.Location = New-Object System.Drawing.Point(210, 10) # Center
     }
-    9 { # Configure Streaming
-      $buttonAction.Visible = $true
-      $buttonAction.Text = "Copy Stream Args"
-      $buttonAction.Tag = "copy_stream_args"
-      $buttonAction.Location = New-Object System.Drawing.Point(210, 10) # Center
+    8 { # Configure Stream Nook (no buttons needed as it's automatic)
+    }
+    9 { # Final Checks (no buttons needed)
     }
     10 { # Finish
       $buttonNext.Text = "Finish"
@@ -671,26 +663,6 @@ gpu-api=d3D11
       Set-Clipboard -Value $conf.Replace("`r`n", "`n") # Ensure Unix line endings
       [System.Windows.Forms.MessageBox]::Show(
         "MPV config copied to clipboard!`n`nPaste this into your new mpv.conf file.",
-        "✓ Copied Successfully",
-        "OK",
-        "Information"
-      )
-    }
-    "copy_player_args" {
-      $playerArgs = '--keep-open=no --geometry=1075x605 --no-border --cache=no'
-      Set-Clipboard -Value $playerArgs
-      [System.Windows.Forms.MessageBox]::Show(
-        "MPV player arguments copied to clipboard!`n`nPaste them into the Player Arguments field in Streamlink Twitch GUI settings.",
-        "✓ Copied Successfully",
-        "OK",
-        "Information"
-      )
-    }
-    "copy_stream_args" {
-      $streamArgs = '--twitch-proxy-playlist=https://lb-na.cdn-perfprod.com,https://eu.luminous.dev --twitch-proxy-playlist-fallback'
-      Set-Clipboard -Value $streamArgs
-      [System.Windows.Forms.MessageBox]::Show(
-        "Streaming parameters copied to clipboard!`n`nPaste them into the Custom Parameters field in Streamlink Twitch GUI settings.",
         "✓ Copied Successfully",
         "OK",
         "Information"
