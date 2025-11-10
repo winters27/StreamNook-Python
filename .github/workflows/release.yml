@@ -54,120 +54,73 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           
-          # Get current commit hash
-          $currentCommit = git rev-parse HEAD
-          Write-Host "Current commit: $currentCommit"
+          Write-Host "=== Version Detection ==="
+          Write-Host "Current commit: $(git rev-parse HEAD)"
+          Write-Host ""
           
-          # Get all tags and sort them
-          $latestTag = (git tag --list "v*" --sort=-v:refname | Select-Object -First 1)
-          Write-Host "Latest tag found: $latestTag"
+          # Get all version tags
+          $allTags = @(git tag --list "v*" --sort=-v:refname)
+          Write-Host "All existing tags: $($allTags -join ', ')"
           
-          if (-not $latestTag) { 
-              $latestTag = "v0.0.0" 
-              Write-Host "No existing tags, starting from v0.0.0"
-          }
-
-          # Get the commit hash of the latest tag
-          $tagCommit = git rev-list -n 1 $latestTag 2>$null
-          if ($tagCommit) {
-              Write-Host "Latest tag ($latestTag) points to commit: $tagCommit"
-          }
-
-          # Check if current commit already has this tag
-          if ($tagCommit -eq $currentCommit) {
-              Write-Host "Current commit is already tagged as $latestTag"
-              Write-Host "A workflow trigger should mean there's a new commit. Checking..."
-              
-              # List recent commits for debugging
-              Write-Host "Recent commits:"
-              git log --oneline -n 5
-              
-              # This shouldn't happen with push triggers, but if it does, skip
-              Write-Host "ERROR: Current commit already tagged. This workflow should only run on new commits."
-              echo "SKIP_BUILD=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-              exit 0
-          }
-
-          # Check if the tag is an ancestor of HEAD (i.e., HEAD is descended from the tag)
-          $isAncestor = git merge-base --is-ancestor $latestTag HEAD 2>&1
-          $isAncestorResult = $LASTEXITCODE
+          # Get the latest tag
+          $latestTag = $allTags | Select-Object -First 1
           
-          if ($isAncestorResult -ne 0) {
-              Write-Host "WARNING: Tag $latestTag is not an ancestor of current HEAD"
-              Write-Host "This means the tag is on a different branch or history was rewritten"
-              Write-Host "Will create new version anyway since this is a push trigger"
-              $commits = @("dummy") # Force a version bump
+          if (-not $latestTag) {
+              Write-Host "No existing tags found, starting at v1.0.0"
+              $next = "v1.0.0"
           } else {
-              # Tag is an ancestor, check for new commits
-              $commits = git log $latestTag..HEAD --oneline 2>&1
-              Write-Host "Commits since $latestTag : $($commits.Count) commit(s)"
+              Write-Host "Latest tag: $latestTag"
               
-              if (-not $commits -or $commits.Count -eq 0) {
-                  Write-Host "No new commits detected - but this shouldn't happen on a push trigger"
-                  Write-Host "This is likely because current commit is already tagged"
-                  Write-Host "Skipping build to prevent duplicate release"
-                  echo "SKIP_BUILD=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-                  exit 0
+              # Parse version
+              if ($latestTag -match "^v(\d+)\.(\d+)\.(\d+)$") {
+                  $maj = [int]$Matches[1]
+                  $min = [int]$Matches[2]
+                  $pat = [int]$Matches[3]
+                  
+                  # Check commit messages for version bump type
+                  $recentCommits = git log -n 5 --pretty=%B
+                  
+                  if ($recentCommits -match 'BREAKING CHANGE' -or $recentCommits -match 'release: major') {
+                      $maj++; $min = 0; $pat = 0
+                      Write-Host "Detected MAJOR version bump"
+                  } elseif ($recentCommits -match '^feat' -or $recentCommits -match 'release: minor') {
+                      $min++; $pat = 0
+                      Write-Host "Detected MINOR version bump"
+                  } else {
+                      $pat++
+                      Write-Host "Detected PATCH version bump (default)"
+                  }
+                  
+                  $next = "v{0}.{1}.{2}" -f $maj, $min, $pat
+              } else {
+                  Write-Host "WARNING: Could not parse $latestTag, defaulting to v1.0.0"
+                  $next = "v1.0.0"
               }
           }
           
-          Write-Host "✓ Proceeding with build"
-
-          # Get commit messages for bump detection
-          $commitMessages = git log $latestTag..HEAD --pretty=%B 2>$null
-          if (-not $commitMessages) {
-              # Fallback: just use recent commit messages
-              $commitMessages = git log -n 5 --pretty=%B
-          }
-          
-          Write-Host "Analyzing commits for version bump..."
-          
-          $bump = "patch" # Default
-          if ($commitMessages -match 'BREAKING CHANGE' -or $commitMessages -match '## release: major') {
-              $bump = "major"
-              Write-Host "Detected MAJOR change"
-          } elseif ($commitMessages -match '^feat' -or $commitMessages -match '## release: minor') {
-              $bump = "minor"
-              Write-Host "Detected MINOR change"
-          } else {
-              Write-Host "Detected PATCH change (default)"
-          }
-
-          if ($latestTag -match "^v(\d+)\.(\d+)\.(\d+)$") {
-            $maj = [int]$Matches[1]; $min = [int]$Matches[2]; $pat = [int]$Matches[3]
-          } else {
-            $maj = 0; $min = 0; $pat = 0
-          }
-
-          switch ($bump) {
-            "major" { $maj++; $min = 0; $pat = 0 }
-            "minor" { $min++; $pat = 0 }
-            default { $pat++ }
-          }
-
-          $next = "v{0}.{1}.{2}" -f $maj, $min, $pat
-          
-          # Check if this tag already exists
+          # Final check: does this tag already exist?
           $tagExists = git tag --list $next
           if ($tagExists) {
-              Write-Host "WARNING: Tag $next already exists - incrementing patch version"
-              $pat++
-              $next = "v{0}.{1}.{2}" -f $maj, $min, $pat
+              Write-Host "ERROR: Tag $next already exists!"
+              Write-Host "Tags that exist: $($allTags -join ', ')"
+              Write-Host "Cannot create duplicate tag. Please delete the existing tag or adjust version."
+              exit 1
           }
+          
+          Write-Host ""
+          Write-Host "✓ Will create version: $next"
+          Write-Host "====================" 
           
           echo "NEXT_VERSION=$next" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "NEXT_VERSION_NO_V=$($next.TrimStart('v'))" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "version=$next" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          Write-Host "✓ Next version will be: $next"
 
       - name: Build application (PowerShell)
-        if: env.SKIP_BUILD != 'true'
         shell: pwsh
         run: |
           ./build.ps1 -NonInteractive -VersionOverride $env:NEXT_VERSION_NO_V -UpxDir $env:UPX_DIR
 
       - name: Upload build as artifact (for debugging/retention)
-        if: env.SKIP_BUILD != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: StreamNook-${{ env.NEXT_VERSION }}-exe
@@ -177,7 +130,6 @@ jobs:
 
       - id: notes
         name: Create release notes from commits
-        if: env.SKIP_BUILD != 'true'
         shell: pwsh
         run: |
           $prev = (git tag --list "v*" --sort=-v:refname | Select-Object -First 1)
@@ -188,7 +140,6 @@ jobs:
           echo "body=$lines" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Create tag
-        if: env.SKIP_BUILD != 'true'
         shell: pwsh
         run: |
           git config user.name  "github-actions[bot]"
@@ -206,7 +157,6 @@ jobs:
 
       # Create the GitHub Release and upload the EXE in one step
       - name: Publish GitHub Release
-        if: env.SKIP_BUILD != 'true'
         uses: softprops/action-gh-release@v2
         with:
           name: StreamNook ${{ env.NEXT_VERSION }}
