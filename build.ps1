@@ -401,28 +401,23 @@ function Invoke-Build {
         $args = @(
             '--onefile',
             '--windowed',
-            '--strip',
-            '--optimize=2'  # Maximum Python optimization
+            '--strip'
         )
         
-        # Only add specific Discord RPC bindings, not everything
-        $args += '--hidden-import=discordrpc'
+        # Collect Discord RPC dependencies
+        $args += '--collect-all=discordrpc'
         
-        # For PySide6, only collect what's needed (avoid --collect-all which pulls EVERYTHING)
-        # Add specific PySide6 modules instead
+        # For PySide6, only collect what's actually needed instead of everything
+        # Using hidden-import instead of collect-all to avoid pulling 100+ MB of unused Qt modules
         $args += '--hidden-import=PySide6.QtCore'
         $args += '--hidden-import=PySide6.QtGui'
         $args += '--hidden-import=PySide6.QtWidgets'
         
-        # Exclude unnecessary modules to reduce size
+        # Exclude only the really big modules you definitely don't use
+        # Being more conservative here to avoid breaking urllib/ssl
         $args += '--exclude-module=tkinter'
         $args += '--exclude-module=matplotlib'
-        $args += '--exclude-module=numpy'
-        $args += '--exclude-module=pandas'
-        $args += '--exclude-module=scipy'
         $args += '--exclude-module=PIL'
-        $args += '--exclude-module=unittest'
-        $args += '--exclude-module=test'
         
         # Enable UPX compression if available
         if ($UpxDir -and (Test-Path $UpxDir)) {
