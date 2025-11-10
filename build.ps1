@@ -12,7 +12,10 @@ param(
     [switch]$NonInteractive,
 
     [Parameter(Mandatory=$false)]
-    [string]$VersionOverride
+    [string]$VersionOverride,
+
+    [Parameter(Mandatory=$false)]
+    [string]$UpxDir
 )
 
 # --- Setup ---
@@ -39,22 +42,39 @@ if ([Thread]::CurrentThread.ApartmentState -ne 'STA') {
 # ----------------------------------------
 
 function Suggest-NextVersion {
-    $base = '1.0.0.0'
+    # 1. Try to get the version from Git tags first
+    try {
+        git fetch --tags --force 2>$null
+        $latestTag = (git tag --list "v*" --sort=-v:refname | Select-Object -First 1)
+        if ($latestTag -and ($latestTag -match "^v(\d+)\.(\d+)\.(\d+)$")) {
+            $maj = [int]$Matches[1]
+            $min = [int]$Matches[2]
+            $pat = [int]$Matches[3] + 1 # Suggest next patch version
+            return "{0}.{1}.{2}" -f $maj, $min, $pat
+        }
+    }
+    catch {
+        # Git failed, proceed to fallback
+    }
+
+    # 2. Fallback to local version_info.txt
     if (Test-Path -LiteralPath 'version_info.txt') {
         try {
             $text = Get-Content -LiteralPath 'version_info.txt' -Raw
             if ($text -match "StringStruct\(u'FileVersion',\s*u'(?<ver>\d+\.\d+\.\d+\.\d+)'\)") {
                 $v = $Matches['ver']
                 $p = $v.Split('.') | ForEach-Object { [int]$_ }
-                $p[3] = $p[3] + 1
+                $p[3] = $p[3] + 1 # Increment build number
                 return ($p -join '.')
             }
         }
         catch {
-            # Failed to parse, just return base
+            # Failed to parse, proceed to final fallback
         }
     }
-    return $base
+
+    # 3. Final fallback
+    return '1.0.0.0'
 }
 
 function Parse-VersionTuple([string]$v) {
@@ -371,7 +391,11 @@ function Invoke-Build {
         & $Logger "Using add-data separator '$sep'."
 
         # --- 3. Build Argument List ---
-        $args = @('--onefile', '--windowed', '--collect-all=discordrpc', '--collect-all=PySide6')
+        $args = @('--onefile', '--windowed', '--strip', '--collect-all=discordrpc', '--collect-all=PySide6')
+        if ($UpxDir -and (Test-Path $UpxDir)) {
+            & $Logger "Enabling UPX compression from: $UpxDir"
+            $args += "--upx-dir=$UpxDir"
+        }
         foreach ($item in $params.AddData) {
             if ($item -match '^(?<src>.+?)\s*->\s*(?<dst>.+)$') {
                 $src = $Matches.src

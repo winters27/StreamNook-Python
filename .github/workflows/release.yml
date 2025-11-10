@@ -38,30 +38,33 @@ jobs:
           cache-dependency-path: |
             requirements.txt
 
-      - name: Install build deps
+      - name: Install build deps and UPX
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
+          choco install upx --no-progress
+          echo "UPX_DIR=C:\ProgramData\chocolatey\lib\upx\tools" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      # Compute NEXT_VERSION (vX.Y.Z) and a plain NEXT_VERSION_NO_V
+
       - id: version
-        name: Determine next version from tags
+        name: Determine next version from tags and commits
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          # find latest tag that looks like vX.Y.Z; if none, start at v0.0.0
           $latestTag = (git tag --list "v*" --sort=-v:refname | Select-Object -First 1)
           if (-not $latestTag) { $latestTag = "v0.0.0" }
 
-          # decide bump: default is patch; allow override via commit message keyword
-          $commitMsg = (git log -1 --pretty=%B)
-          $bump = "patch"
-          if ($commitMsg -match "\#\#\s*release:\s*major") { $bump = "major" }
-          elseif ($commitMsg -match "\#\#\s*release:\s*minor") { $bump = "minor" }
+          $commits = git log $latestTag..HEAD --pretty=%B
+          
+          $bump = "patch" # Default
+          if ($commits -match 'BREAKING CHANGE' -or $commits -match '## release: major') {
+              $bump = "major"
+          } elseif ($commits -match '^feat' -or $commits -match '## release: minor') {
+              $bump = "minor"
+          }
 
-          # parse and bump
           if ($latestTag -match "^v(\d+)\.(\d+)\.(\d+)$") {
             $maj = [int]$Matches[1]; $min = [int]$Matches[2]; $pat = [int]$Matches[3]
           } else {
@@ -82,7 +85,7 @@ jobs:
       - name: Build application (PowerShell)
         shell: pwsh
         run: |
-          ./build.ps1 -NonInteractive -VersionOverride $env:NEXT_VERSION_NO_V
+          ./build.ps1 -NonInteractive -VersionOverride $env:NEXT_VERSION_NO_V -UpxDir $env:UPX_DIR
 
       - name: Upload build as artifact (for debugging/retention)
         uses: actions/upload-artifact@v4
