@@ -404,6 +404,27 @@ function Invoke-Build {
             '--strip'
         )
         
+        # CRITICAL: SSL/HTTPS Support for urllib
+        & $Logger "Configuring SSL/HTTPS support..."
+        $args += '--hidden-import=_ssl'
+        $args += '--hidden-import=ssl'
+        $args += '--collect-all=_ssl'
+        
+        # Collect Python's DLLs directory (contains SSL libraries on Windows)
+        try {
+            $pythonDllsDir = & python -c "import sys; import os; print(os.path.join(sys.base_prefix, 'DLLs'))" 2>$null
+            if ($pythonDllsDir -and (Test-Path $pythonDllsDir)) {
+                & $Logger "Found Python DLLs directory: $pythonDllsDir"
+                & $Logger "Collecting SSL binaries from Python DLLs..."
+                $args += '--collect-binaries'
+                $args += "$pythonDllsDir$sep."
+            } else {
+                & $Logger "Warning: Could not find Python DLLs directory"
+            }
+        } catch {
+            & $Logger "Warning: Error locating Python DLLs: $_"
+        }
+        
         # Collect Discord RPC dependencies
         $args += '--collect-all=discordrpc'
         
