@@ -207,113 +207,120 @@ $xaml = @"
         </Grid.RowDefinitions>
 
         <StackPanel Orientation="Horizontal" Grid.Row="0">
-          <TextBlock Text="Entry Script:" VerticalAlignment="Center" Width="100"/>
-          <TextBox x:Name="tbEntry" Width="520"/>
-          <Button x:Name="btnBrowseEntry" Content="Browse..." Margin="6,0,0,0" Width="80"/>
+          <TextBlock Text="Entry Script:" VerticalAlignment="Center" Width="80"/>
+          <TextBox x:Name="tbEntry" Width="320"/>
+          <Button x:Name="btnBrowseEntry" Content="Browse…" Margin="6,0,0,0" Width="80"/>
         </StackPanel>
 
-        <StackPanel Orientation="Horizontal" Grid.Row="1" Margin="0,6,0,0">
-          <TextBlock Text="Icon (.ico):" VerticalAlignment="Center" Width="100"/>
-          <TextBox x:Name="tbIcon" Width="520"/>
-          <Button x:Name="btnBrowseIcon" Content="Browse..." Margin="6,0,0,0" Width="80"/>
+        <StackPanel Orientation="Horizontal" Grid.Row="1" Margin="0,4,0,0">
+          <TextBlock Text="Icon (.ico):" VerticalAlignment="Center" Width="80"/>
+          <TextBox x:Name="tbIcon" Width="320"/>
+          <Button x:Name="btnBrowseIcon" Content="Browse…" Margin="6,0,0,0" Width="80"/>
         </StackPanel>
 
-        <GroupBox Header="Add-Data (SOURCE -> DEST)" Grid.Row="2" Margin="0,6,0,0">
+        <GroupBox Header="Add Data (--add-data pairs)" Grid.Row="2" Margin="0,6,0,0">
           <Grid>
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="*"/>
-              <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
             <Grid.RowDefinitions>
+              <RowDefinition Height="Auto"/>
               <RowDefinition Height="*"/>
               <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
-            <ListBox x:Name="lbAddData" Grid.Row="0" Grid.ColumnSpan="2" />
-            <StackPanel Orientation="Horizontal" Grid.Row="1" Grid.Column="0" Margin="0,6,0,0">
-              <TextBox x:Name="tbSrc" Width="300" Margin="0,0,6,0"/>
-              <TextBox x:Name="tbDest" Width="180" Margin="0,0,6,0"/>
-              <Button x:Name="btnAddPair" Content="Add" Width="80"/>
-              <Button x:Name="btnRemovePair" Content="Remove Selected" Margin="6,0,0,0" Width="130"/>
-              <Button x:Name="btnBrowseSrc" Content="Browse Source" Margin="6,0,0,0" Width="120"/>
+            <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="4">
+              <TextBlock Text="SOURCE:" VerticalAlignment="Center" Width="60"/>
+              <TextBox x:Name="tbSrc" Width="140"/>
+              <Button x:Name="btnBrowseSrc" Content="…" Margin="4,0,0,0" Width="30"/>
+              <TextBlock Text="DEST:" VerticalAlignment="Center" Margin="8,0,0,0" Width="40"/>
+              <TextBox x:Name="tbDest" Width="100"/>
+              <Button x:Name="btnAddPair" Content="Add" Margin="6,0,0,0" Width="60"/>
             </StackPanel>
+            <ListBox x:Name="lbAddData" Grid.Row="1" Margin="4"/>
+            <Button x:Name="btnRemovePair" Content="Remove Selected" Grid.Row="2" Margin="4" HorizontalAlignment="Right" Width="120"/>
           </Grid>
         </GroupBox>
       </Grid>
     </StackPanel>
 
-    <GroupBox Grid.Row="1" Header="Build Log">
-      <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <TextBox x:Name="tbLog" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" FontFamily="Consolas" Height="260"/>
-      </ScrollViewer>
+    <GroupBox Header="Output Log" Grid.Row="1" Margin="0,6,0,6">
+      <TextBox x:Name="tbLog" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"/>
     </GroupBox>
 
-    <DockPanel Grid.Row="2" LastChildFill="False" Margin="0,8,0,0">
-      <CheckBox x:Name="cbDry" Content="Dry Run (don't build)" Margin="0,0,12,0"/>
-      <TextBlock x:Name="lblPyI" VerticalAlignment="Center" Foreground="Gray" Margin="0,0,12,0"/>
-      <Button x:Name="btnBuild" Content="Build" Width="120" Margin="0,0,6,0"/>
-      <Button x:Name="btnClose" Content="Close" Width="80"/>
-    </DockPanel>
+    <StackPanel Orientation="Horizontal" Grid.Row="2" Margin="0,6,0,0">
+      <CheckBox x:Name="cbDry" Content="Dry Run (show command only)" VerticalAlignment="Center"/>
+      <Button x:Name="btnBuild" Content="Build EXE" Margin="12,0,0,0" Padding="12,4" FontWeight="Bold"/>
+      <Button x:Name="btnClose" Content="Close" Margin="6,0,0,0" Padding="12,4"/>
+      <TextBlock x:Name="lblPyI" Margin="12,0,0,0" VerticalAlignment="Center" FontStyle="Italic" Foreground="Gray"/>
+    </StackPanel>
   </Grid>
 </Window>
 "@
 
 # ----------------------------------------
-# ---------- UI Init and Logic ----------
+# ---------- Parse XAML & Wire Up UI ----------
 # ----------------------------------------
 
-# Load XAML
-$window = [XamlReader]::Parse($xaml)
+$reader = [System.Xml.XmlReader]::Create([System.IO.StringReader]::new($xaml))
+$window = [XamlReader]::Load($reader)
 
-# Get control references dynamically
-$controls = @(
-    'tbProject', 'tbOrg', 'tbDesc', 'tbRepo', 'tbExe', 'tbVersion',
-    'btnSuggest', 'tbEntry', 'btnBrowseEntry', 'tbIcon', 'btnBrowseIcon',
-    'lbAddData', 'tbSrc', 'tbDest', 'btnAddPair', 'btnRemovePair', 'btnBrowseSrc',
-    'tbLog', 'cbDry', 'btnBuild', 'btnClose', 'lblPyI'
-)
-$controls | ForEach-Object {
-    Set-Variable -Name $_ -Value $window.FindName($_)
-}
+$tbProject   = $window.FindName("tbProject")
+$tbOrg       = $window.FindName("tbOrg")
+$tbDesc      = $window.FindName("tbDesc")
+$tbRepo      = $window.FindName("tbRepo")
+$tbExe       = $window.FindName("tbExe")
+$tbVersion   = $window.FindName("tbVersion")
+$btnSuggest  = $window.FindName("btnSuggest")
 
-# Defaults
-$tbProject.Text = 'StreamNook'
-$tbOrg.Text = 'StreamNook'
-$tbDesc.Text = 'StreamNook - Open-source Twitch Client'
-$tbRepo.Text = 'https://github.com/winters27/StreamNook'
-$tbExe.Text = 'StreamNook'
-$tbEntry.Text = '.\main.py'
-$tbIcon.Text = 'assets\icons\icon_256x256.ico'
-@('assets', 'data') | ForEach-Object { [void]$lbAddData.Items.Add("$_ -> $_") }
-$tbVersion.Text = Suggest-NextVersion
+$tbEntry        = $window.FindName("tbEntry")
+$tbIcon         = $window.FindName("tbIcon")
+$btnBrowseEntry = $window.FindName("btnBrowseEntry")
+$btnBrowseIcon  = $window.FindName("btnBrowseIcon")
 
-# Logging Helper
-function UI-Log($msg) {
-    $tbLog.AppendText((Get-Date).ToString('HH:mm:ss ') + $msg + "`r`n")
+$tbSrc          = $window.FindName("tbSrc")
+$tbDest         = $window.FindName("tbDest")
+$btnBrowseSrc   = $window.FindName("btnBrowseSrc")
+$lbAddData      = $window.FindName("lbAddData")
+$btnAddPair     = $window.FindName("btnAddPair")
+$btnRemovePair  = $window.FindName("btnRemovePair")
+
+$tbLog      = $window.FindName("tbLog")
+$cbDry      = $window.FindName("cbDry")
+$btnBuild   = $window.FindName("btnBuild")
+$btnClose   = $window.FindName("btnClose")
+$lblPyI     = $window.FindName("lblPyI")
+
+# Pre-populate defaults
+$tbProject.Text  = 'StreamNook'
+$tbOrg.Text      = 'StreamNook Project'
+$tbDesc.Text     = 'StreamNook - Open-source Twitch Stream Viewer with Discord Rich Presence'
+$tbRepo.Text     = 'https://github.com/winters27/StreamNook'
+$tbExe.Text      = 'StreamNook'
+$tbVersion.Text  = Suggest-NextVersion
+$tbEntry.Text    = '.\main.py'
+$tbIcon.Text     = 'assets\icons\icon_256x256.ico'
+$lbAddData.Items.Add('assets -> assets')
+$lbAddData.Items.Add('data -> data')
+
+function UI-Log([string]$msg) {
+    $tbLog.AppendText("$msg`r`n")
     $tbLog.ScrollToEnd()
 }
-UI-Log "Working directory: $scriptRoot"
 
-# File/Folder Pickers (cleaner, use splatting, set InitialDirectory)
-function Pick-File([string]$filter = 'All files (*.*)|*.*') {
-    $dlg = [OpenFileDialog]@{
-        Filter = $filter
-        Multiselect = $false
-        InitialDirectory = $scriptRoot
-    }
-    if ($dlg.ShowDialog() -eq [DialogResult]::OK) { return $dlg.FileName } else { return $null }
+function Pick-File([string]$filter = 'Python Scripts (*.py)|*.py|All files (*.*)|*.*') {
+    $dlg = New-Object System.Windows.Forms.OpenFileDialog
+    $dlg.Filter = $filter
+    if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { return $dlg.FileName }
+    return $null
 }
+
 function Pick-Folder {
-    $dlg = [FolderBrowserDialog]@{
-        SelectedPath = $scriptRoot
-    }
-    if ($dlg.ShowDialog() -eq [DialogResult]::OK) { return $dlg.SelectedPath } else { return $null }
+    $dlg = New-Object System.Windows.Forms.FolderBrowserDialog
+    if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { return $dlg.SelectedPath }
+    return $null
 }
 
-# Events
 $btnSuggest.Add_Click({ $tbVersion.Text = Suggest-NextVersion })
 
 $btnBrowseEntry.Add_Click({
-    $f = Pick-File 'Python (*.py)|*.py|All files (*.*)|*.*'
+    $f = Pick-File
     if ($f) { $tbEntry.Text = (Resolve-Path $f).Path }
 })
 
@@ -390,12 +397,41 @@ function Invoke-Build {
         $sep = Get-AddDataSeparator $PyInstallerInfo.Cmd
         & $Logger "Using add-data separator '$sep'."
 
-        # --- 3. Build Argument List ---
-        $args = @('--onefile', '--windowed', '--strip', '--collect-all=discordrpc', '--collect-all=PySide6')
+        # --- 3. Build Argument List (OPTIMIZED FOR SIZE) ---
+        $args = @(
+            '--onefile',
+            '--windowed',
+            '--strip',
+            '--optimize=2'  # Maximum Python optimization
+        )
+        
+        # Only add specific Discord RPC bindings, not everything
+        $args += '--hidden-import=discordrpc'
+        
+        # For PySide6, only collect what's needed (avoid --collect-all which pulls EVERYTHING)
+        # Add specific PySide6 modules instead
+        $args += '--hidden-import=PySide6.QtCore'
+        $args += '--hidden-import=PySide6.QtGui'
+        $args += '--hidden-import=PySide6.QtWidgets'
+        
+        # Exclude unnecessary modules to reduce size
+        $args += '--exclude-module=tkinter'
+        $args += '--exclude-module=matplotlib'
+        $args += '--exclude-module=numpy'
+        $args += '--exclude-module=pandas'
+        $args += '--exclude-module=scipy'
+        $args += '--exclude-module=PIL'
+        $args += '--exclude-module=unittest'
+        $args += '--exclude-module=test'
+        
+        # Enable UPX compression if available
         if ($UpxDir -and (Test-Path $UpxDir)) {
             & $Logger "Enabling UPX compression from: $UpxDir"
             $args += "--upx-dir=$UpxDir"
+        } else {
+            & $Logger "UPX not found - build will be larger. Install with: choco install upx"
         }
+        
         foreach ($item in $params.AddData) {
             if ($item -match '^(?<src>.+?)\s*->\s*(?<dst>.+)$') {
                 $src = $Matches.src
@@ -470,7 +506,9 @@ function Post-Build-Verification {
     
     $dist = Join-Path -Path (Resolve-Path '.\dist').Path -ChildPath "$ExeName.exe"
     if (Test-Path -LiteralPath $dist) {
-        & $Logger "Build complete: $dist"
+        $sizeBytes = (Get-Item $dist).Length
+        $sizeMB = [math]::Round($sizeBytes / 1MB, 2)
+        & $Logger "Build complete: $dist ($sizeMB MB)"
         try {
             $vi = (Get-Item $dist).VersionInfo
             & $Logger ("  CompanyName: " + $vi.CompanyName)

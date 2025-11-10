@@ -53,15 +53,28 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
+          
+          # Get all tags and sort them
           $latestTag = (git tag --list "v*" --sort=-v:refname | Select-Object -First 1)
           if (-not $latestTag) { $latestTag = "v0.0.0" }
 
-          $commits = git log $latestTag..HEAD --pretty=%B
+          # Get commits since last tag
+          $commits = git log $latestTag..HEAD --oneline
+          
+          # If no new commits, skip the build
+          if (-not $commits) {
+              Write-Host "No new commits since $latestTag - skipping release"
+              echo "SKIP_BUILD=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+              exit 0
+          }
+
+          # Get commit messages for bump detection
+          $commitMessages = git log $latestTag..HEAD --pretty=%B
           
           $bump = "patch" # Default
-          if ($commits -match 'BREAKING CHANGE' -or $commits -match '## release: major') {
+          if ($commitMessages -match 'BREAKING CHANGE' -or $commitMessages -match '## release: major') {
               $bump = "major"
-          } elseif ($commits -match '^feat' -or $commits -match '## release: minor') {
+          } elseif ($commitMessages -match '^feat' -or $commitMessages -match '## release: minor') {
               $bump = "minor"
           }
 
@@ -78,16 +91,28 @@ jobs:
           }
 
           $next = "v{0}.{1}.{2}" -f $maj, $min, $pat
+          
+          # Check if this tag already exists (shouldn't happen, but safety check)
+          $tagExists = git tag --list $next
+          if ($tagExists) {
+              Write-Host "Tag $next already exists - incrementing patch version"
+              $pat++
+              $next = "v{0}.{1}.{2}" -f $maj, $min, $pat
+          }
+          
           echo "NEXT_VERSION=$next" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "NEXT_VERSION_NO_V=$($next.TrimStart('v'))" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "version=$next" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Write-Host "Next version will be: $next"
 
       - name: Build application (PowerShell)
+        if: env.SKIP_BUILD != 'true'
         shell: pwsh
         run: |
           ./build.ps1 -NonInteractive -VersionOverride $env:NEXT_VERSION_NO_V -UpxDir $env:UPX_DIR
 
       - name: Upload build as artifact (for debugging/retention)
+        if: env.SKIP_BUILD != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: StreamNook-${{ env.NEXT_VERSION }}-exe
@@ -97,9 +122,10 @@ jobs:
 
       - id: notes
         name: Create release notes from commits
+        if: env.SKIP_BUILD != 'true'
         shell: pwsh
         run: |
-          $prev = (git tag --list "v*" --sort=-v:refname | Select-Object -Skip 1 -First 1)
+          $prev = (git tag --list "v*" --sort=-v:refname | Select-Object -First 1)
           if (-not $prev) { $prev = (git rev-list --max-parents=0 HEAD | Select-Object -First 1) }
           $lines = git log "$prev"..HEAD --pretty=format:"* %s (%h)"
           # escape for GitHub output (percent, LF, CR)
@@ -107,15 +133,25 @@ jobs:
           echo "body=$lines" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Create tag
+        if: env.SKIP_BUILD != 'true'
         shell: pwsh
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Double-check tag doesn't exist before creating
+          $tagExists = git tag --list $env:NEXT_VERSION
+          if ($tagExists) {
+              Write-Error "Tag $env:NEXT_VERSION already exists!"
+              exit 1
+          }
+          
           git tag $env:NEXT_VERSION
           git push origin $env:NEXT_VERSION
 
       # Create the GitHub Release and upload the EXE in one step
       - name: Publish GitHub Release
+        if: env.SKIP_BUILD != 'true'
         uses: softprops/action-gh-release@v2
         with:
           name: StreamNook ${{ env.NEXT_VERSION }}
