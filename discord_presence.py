@@ -8,7 +8,7 @@ from PySide6 import QtCore
 from concurrent.futures import ThreadPoolExecutor # Import ThreadPoolExecutor
 try:
     import discordrpc
-    from discordrpc import Activity, StatusDisplay
+    from discordrpc import Activity, StatusDisplay, Button
     from discordrpc import DiscordNotOpened, RPCException
 except ImportError:
     print("Discord-RPC library not found. Please install with: pip install discord-rpc")
@@ -99,6 +99,9 @@ class DiscordPresenceClient(QtCore.QObject):
                 "act_type": Activity.Playing,
                 "large_image": large_image,
                 "ts_start": self.start_time,
+                "buttons": [
+                    Button("Download Stream Nook", "https://github.com/winters27/StreamNook/")
+                ],
             }
             
             # 3. Call set_activity. This is the test.
@@ -157,6 +160,9 @@ class DiscordPresenceClient(QtCore.QObject):
                 "act_type": act_type_enum,
                 "large_image": large_image or None,
                 "small_image": small_image or None,
+                "buttons": [
+                    Button("Download Stream Nook", "https://github.com/winters27/StreamNook/")
+                ],
             }
 
             if isinstance(start_time, int) and start_time > 0:

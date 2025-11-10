@@ -17,7 +17,7 @@ import atexit
 from pathlib import Path
 from functools import lru_cache
 from contextlib import contextmanager
-from toast import ToastManager
+from toast import ToastManager, LoadingToast
 
 import psutil
 import ctypes
