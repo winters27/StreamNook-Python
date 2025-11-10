@@ -371,7 +371,7 @@ function Invoke-Build {
         & $Logger "Using add-data separator '$sep'."
 
         # --- 3. Build Argument List ---
-        $args = @('--onefile', '--windowed', '--collect-all=discordrpc')
+        $args = @('--onefile', '--windowed', '--collect-all=discordrpc', '--collect-all=PySide6')
         foreach ($item in $params.AddData) {
             if ($item -match '^(?<src>.+?)\s*->\s*(?<dst>.+)$') {
                 $src = $Matches.src
