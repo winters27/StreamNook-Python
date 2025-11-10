@@ -409,6 +409,8 @@ function Invoke-Build {
         $args += '--hidden-import=_ssl'
         $args += '--hidden-import=ssl'
         $args += '--collect-all=_ssl'
+        $args += '--collect-data=certifi'
+
         
         # Collect Python's DLLs directory (contains SSL libraries on Windows)
         try {
@@ -444,6 +446,15 @@ function Invoke-Build {
         if ($UpxDir -and (Test-Path $UpxDir)) {
             & $Logger "Enabling UPX compression from: $UpxDir"
             $args += "--upx-dir=$UpxDir"
+
+            # Exclude critical DLLs from UPX to preserve SSL/HTTPS support
+            $args += '--upx-exclude=python*.dll'
+            $args += '--upx-exclude=vcruntime*.dll'
+            $args += '--upx-exclude=libcrypto*'
+            $args += '--upx-exclude=libssl*'
+            $args += '--upx-exclude=ssleay32.dll'
+            $args += '--upx-exclude=libeay32.dll'
+
         } else {
             & $Logger "UPX not found - build will be larger. Install with: choco install upx"
         }
