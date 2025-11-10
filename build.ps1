@@ -397,67 +397,23 @@ function Invoke-Build {
         $sep = Get-AddDataSeparator $PyInstallerInfo.Cmd
         & $Logger "Using add-data separator '$sep'."
 
-        # --- 3. Build Argument List (OPTIMIZED FOR SIZE) ---
+        # --- 3. Build Argument List (BASIC - MATCHING YOUR WORKING LOCAL BUILD) ---
+        & $Logger "Using basic PyInstaller configuration (no aggressive optimization)"
         $args = @(
             '--onefile',
             '--windowed',
-            '--strip'
+            '--collect-all=discordrpc'
         )
         
-        # CRITICAL: SSL/HTTPS Support for urllib
-        & $Logger "Configuring SSL/HTTPS support..."
-        $args += '--hidden-import=_ssl'
-        $args += '--hidden-import=ssl'
-        $args += '--collect-all=_ssl'
-        $args += '--collect-data=certifi'
-
-        
-        # Collect Python's DLLs directory (contains SSL libraries on Windows)
-        try {
-            $pythonDllsDir = & python -c "import sys; import os; print(os.path.join(sys.base_prefix, 'DLLs'))" 2>$null
-            if ($pythonDllsDir -and (Test-Path $pythonDllsDir)) {
-                & $Logger "Found Python DLLs directory: $pythonDllsDir"
-                & $Logger "Collecting SSL binaries from Python DLLs..."
-                $args += '--collect-binaries'
-                $args += "$pythonDllsDir$sep."
-            } else {
-                & $Logger "Warning: Could not find Python DLLs directory"
-            }
-        } catch {
-            & $Logger "Warning: Error locating Python DLLs: $_"
-        }
-        
-        # Collect Discord RPC dependencies
-        $args += '--collect-all=discordrpc'
-        
-        # For PySide6, only collect what's actually needed instead of everything
-        # Using hidden-import instead of collect-all to avoid pulling 100+ MB of unused Qt modules
-        $args += '--hidden-import=PySide6.QtCore'
-        $args += '--hidden-import=PySide6.QtGui'
-        $args += '--hidden-import=PySide6.QtWidgets'
-        
-        # Exclude only the really big modules you definitely don't use
-        # Being more conservative here to avoid breaking urllib/ssl
-        $args += '--exclude-module=tkinter'
-        $args += '--exclude-module=matplotlib'
-        $args += '--exclude-module=PIL'
-        
         # Enable UPX compression if available
-        if ($UpxDir -and (Test-Path $UpxDir)) {
-            & $Logger "Enabling UPX compression from: $UpxDir"
-            $args += "--upx-dir=$UpxDir"
-
-            # Exclude critical DLLs from UPX to preserve SSL/HTTPS support
-            $args += '--upx-exclude=python*.dll'
-            $args += '--upx-exclude=vcruntime*.dll'
-            $args += '--upx-exclude=libcrypto*'
-            $args += '--upx-exclude=libssl*'
-            $args += '--upx-exclude=ssleay32.dll'
-            $args += '--upx-exclude=libeay32.dll'
-
-        } else {
-            & $Logger "UPX not found - build will be larger. Install with: choco install upx"
-        }
+        # DISABLED FOR DEBUGGING - UPX can cause issues
+        # if ($UpxDir -and (Test-Path $UpxDir)) {
+        #     & $Logger "Enabling UPX compression from: $UpxDir"
+        #     $args += "--upx-dir=$UpxDir"
+        # } else {
+        #     & $Logger "UPX not found - build will be larger. Install with: choco install upx"
+        # }
+        & $Logger "UPX compression disabled for compatibility"
         
         foreach ($item in $params.AddData) {
             if ($item -match '^(?<src>.+?)\s*->\s*(?<dst>.+)$') {
