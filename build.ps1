@@ -43,7 +43,7 @@ function Suggest-NextVersion {
     if (Test-Path -LiteralPath 'version_info.txt') {
         try {
             $text = Get-Content -LiteralPath 'version_info.txt' -Raw
-            if ($text -match "StringStruct\(u'FileVersion',\s*u'(?<ver>\d+\.\d+\d+\.\d+)'\)") {
+            if ($text -match "StringStruct\(u'FileVersion',\s*u'(?<ver>\d+\.\d+\.\d+\.\d+)'\)") {
                 $v = $Matches['ver']
                 $p = $v.Split('.') | ForEach-Object { [int]$_ }
                 $p[3] = $p[3] + 1
@@ -58,8 +58,15 @@ function Suggest-NextVersion {
 }
 
 function Parse-VersionTuple([string]$v) {
-    if (-not $v -or -not ($v -match '^\d+(\.\d+){3}$')) {
-        throw "Version must be Major.Minor.Patch.Build (e.g. 1.2.3.4)."
+    if (-not $v) { throw "Version string cannot be empty." }
+    
+    # Accept Major.Minor.Patch and append .0 for build
+    if ($v -match '^\d+\.\d+\.\d+$') {
+        $v += '.0'
+    }
+
+    if (-not ($v -match '^\d+(\.\d+){3}$')) {
+        throw "Version must be Major.Minor.Patch or Major.Minor.Patch.Build (e.g., 1.2.3 or 1.2.3.4)."
     }
     $parts = $v.Split('.') | ForEach-Object { [int]$_ }
     return '(' + ($parts -join ', ') + ')'
