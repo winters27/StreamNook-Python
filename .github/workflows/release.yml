@@ -54,28 +54,81 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           
+          # Get current commit hash
+          $currentCommit = git rev-parse HEAD
+          Write-Host "Current commit: $currentCommit"
+          
           # Get all tags and sort them
           $latestTag = (git tag --list "v*" --sort=-v:refname | Select-Object -First 1)
-          if (-not $latestTag) { $latestTag = "v0.0.0" }
-
-          # Get commits since last tag
-          $commits = git log $latestTag..HEAD --oneline
+          Write-Host "Latest tag found: $latestTag"
           
-          # If no new commits, skip the build
-          if (-not $commits) {
-              Write-Host "No new commits since $latestTag - skipping release"
+          if (-not $latestTag) { 
+              $latestTag = "v0.0.0" 
+              Write-Host "No existing tags, starting from v0.0.0"
+          }
+
+          # Get the commit hash of the latest tag
+          $tagCommit = git rev-list -n 1 $latestTag 2>$null
+          if ($tagCommit) {
+              Write-Host "Latest tag ($latestTag) points to commit: $tagCommit"
+          }
+
+          # Check if current commit already has this tag
+          if ($tagCommit -eq $currentCommit) {
+              Write-Host "Current commit is already tagged as $latestTag"
+              Write-Host "A workflow trigger should mean there's a new commit. Checking..."
+              
+              # List recent commits for debugging
+              Write-Host "Recent commits:"
+              git log --oneline -n 5
+              
+              # This shouldn't happen with push triggers, but if it does, skip
+              Write-Host "ERROR: Current commit already tagged. This workflow should only run on new commits."
+              echo "SKIP_BUILD=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+              exit 0
+          }
+
+          # Try to get commits since last tag (with error handling for orphaned tags)
+          try {
+              $commits = git log $latestTag..HEAD --oneline 2>&1
+              if ($LASTEXITCODE -ne 0) {
+                  Write-Host "Warning: Could not compare with tag $latestTag (possibly orphaned/from different branch)"
+                  Write-Host "Will create new version anyway since this is a new commit"
+                  $commits = @("dummy") # Force a version bump
+              }
+          } catch {
+              Write-Host "Warning: Error comparing commits: $_"
+              $commits = @("dummy") # Force a version bump
+          }
+          
+          Write-Host "Commits since $latestTag : $($commits.Count) commit(s)"
+          
+          # If truly no new commits (shouldn't happen on push trigger)
+          if (-not $commits -or $commits.Count -eq 0) {
+              Write-Host "No new commits detected - but this shouldn't happen on a push trigger"
+              Write-Host "Skipping build to be safe"
               echo "SKIP_BUILD=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
               exit 0
           }
 
           # Get commit messages for bump detection
-          $commitMessages = git log $latestTag..HEAD --pretty=%B
+          $commitMessages = git log $latestTag..HEAD --pretty=%B 2>$null
+          if (-not $commitMessages) {
+              # Fallback: just use recent commit messages
+              $commitMessages = git log -n 5 --pretty=%B
+          }
+          
+          Write-Host "Analyzing commits for version bump..."
           
           $bump = "patch" # Default
           if ($commitMessages -match 'BREAKING CHANGE' -or $commitMessages -match '## release: major') {
               $bump = "major"
+              Write-Host "Detected MAJOR change"
           } elseif ($commitMessages -match '^feat' -or $commitMessages -match '## release: minor') {
               $bump = "minor"
+              Write-Host "Detected MINOR change"
+          } else {
+              Write-Host "Detected PATCH change (default)"
           }
 
           if ($latestTag -match "^v(\d+)\.(\d+)\.(\d+)$") {
@@ -92,10 +145,10 @@ jobs:
 
           $next = "v{0}.{1}.{2}" -f $maj, $min, $pat
           
-          # Check if this tag already exists (shouldn't happen, but safety check)
+          # Check if this tag already exists
           $tagExists = git tag --list $next
           if ($tagExists) {
-              Write-Host "Tag $next already exists - incrementing patch version"
+              Write-Host "WARNING: Tag $next already exists - incrementing patch version"
               $pat++
               $next = "v{0}.{1}.{2}" -f $maj, $min, $pat
           }
@@ -103,7 +156,7 @@ jobs:
           echo "NEXT_VERSION=$next" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "NEXT_VERSION_NO_V=$($next.TrimStart('v'))" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "version=$next" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          Write-Host "Next version will be: $next"
+          Write-Host "✓ Next version will be: $next"
 
       - name: Build application (PowerShell)
         if: env.SKIP_BUILD != 'true'
