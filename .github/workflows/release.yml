@@ -88,28 +88,30 @@ jobs:
               exit 0
           }
 
-          # Try to get commits since last tag (with error handling for orphaned tags)
-          try {
-              $commits = git log $latestTag..HEAD --oneline 2>&1
-              if ($LASTEXITCODE -ne 0) {
-                  Write-Host "Warning: Could not compare with tag $latestTag (possibly orphaned/from different branch)"
-                  Write-Host "Will create new version anyway since this is a new commit"
-                  $commits = @("dummy") # Force a version bump
-              }
-          } catch {
-              Write-Host "Warning: Error comparing commits: $_"
+          # Check if the tag is an ancestor of HEAD (i.e., HEAD is descended from the tag)
+          $isAncestor = git merge-base --is-ancestor $latestTag HEAD 2>&1
+          $isAncestorResult = $LASTEXITCODE
+          
+          if ($isAncestorResult -ne 0) {
+              Write-Host "WARNING: Tag $latestTag is not an ancestor of current HEAD"
+              Write-Host "This means the tag is on a different branch or history was rewritten"
+              Write-Host "Will create new version anyway since this is a push trigger"
               $commits = @("dummy") # Force a version bump
+          } else {
+              # Tag is an ancestor, check for new commits
+              $commits = git log $latestTag..HEAD --oneline 2>&1
+              Write-Host "Commits since $latestTag : $($commits.Count) commit(s)"
+              
+              if (-not $commits -or $commits.Count -eq 0) {
+                  Write-Host "No new commits detected - but this shouldn't happen on a push trigger"
+                  Write-Host "This is likely because current commit is already tagged"
+                  Write-Host "Skipping build to prevent duplicate release"
+                  echo "SKIP_BUILD=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+                  exit 0
+              }
           }
           
-          Write-Host "Commits since $latestTag : $($commits.Count) commit(s)"
-          
-          # If truly no new commits (shouldn't happen on push trigger)
-          if (-not $commits -or $commits.Count -eq 0) {
-              Write-Host "No new commits detected - but this shouldn't happen on a push trigger"
-              Write-Host "Skipping build to be safe"
-              echo "SKIP_BUILD=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-              exit 0
-          }
+          Write-Host "✓ Proceeding with build"
 
           # Get commit messages for bump detection
           $commitMessages = git log $latestTag..HEAD --pretty=%B 2>$null
