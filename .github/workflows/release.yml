@@ -1,0 +1,128 @@
+name: Build and Release
+
+# Quote "on" because YAML 1.1 treats bare "on" as boolean
+"on":
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: {}   # allow manual runs
+
+permissions:
+  contents: write    # needed for creating releases/tags
+  actions: read
+  checks: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Windows EXE and create Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout (full history for tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure tags available
+        run: |
+          git fetch --tags --force
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+
+      - name: Install build deps
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      # Compute NEXT_VERSION (vX.Y.Z) and a plain NEXT_VERSION_NO_V
+      - id: version
+        name: Determine next version from tags
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          # find latest tag that looks like vX.Y.Z; if none, start at v0.0.0
+          $latestTag = (git tag --list "v*" --sort=-v:refname | Select-Object -First 1)
+          if (-not $latestTag) { $latestTag = "v0.0.0" }
+
+          # decide bump: default is patch; allow override via commit message keyword
+          $commitMsg = (git log -1 --pretty=%B)
+          $bump = "patch"
+          if ($commitMsg -match "\#\#\s*release:\s*major") { $bump = "major" }
+          elseif ($commitMsg -match "\#\#\s*release:\s*minor") { $bump = "minor" }
+
+          # parse and bump
+          if ($latestTag -match "^v(\d+)\.(\d+)\.(\d+)$") {
+            $maj = [int]$Matches[1]; $min = [int]$Matches[2]; $pat = [int]$Matches[3]
+          } else {
+            $maj = 0; $min = 0; $pat = 0
+          }
+
+          switch ($bump) {
+            "major" { $maj++; $min = 0; $pat = 0 }
+            "minor" { $min++; $pat = 0 }
+            default { $pat++ }
+          }
+
+          $next = "v{0}.{1}.{2}" -f $maj, $min, $pat
+          echo "NEXT_VERSION=$next" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "NEXT_VERSION_NO_V=$($next.TrimStart('v'))" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "version=$next" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Build application (PowerShell)
+        shell: pwsh
+        run: |
+          ./build.ps1 -NonInteractive -VersionOverride $env:NEXT_VERSION_NO_V
+
+      - name: Upload build as artifact (for debugging/retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: StreamNook-${{ env.NEXT_VERSION }}-exe
+          path: ./dist/StreamNook.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - id: notes
+        name: Create release notes from commits
+        shell: pwsh
+        run: |
+          $prev = (git tag --list "v*" --sort=-v:refname | Select-Object -Skip 1 -First 1)
+          if (-not $prev) { $prev = (git rev-list --max-parents=0 HEAD | Select-Object -First 1) }
+          $lines = git log "$prev"..HEAD --pretty=format:"* %s (%h)"
+          # escape for GitHub output (percent, LF, CR)
+          $lines = $lines -replace '%','%25' -replace "`n","%0A" -replace "`r","%0D"
+          echo "body=$lines" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Create tag
+        shell: pwsh
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag $env:NEXT_VERSION
+          git push origin $env:NEXT_VERSION
+
+      # Create the GitHub Release and upload the EXE in one step
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: StreamNook ${{ env.NEXT_VERSION }}
+          tag_name: ${{ env.NEXT_VERSION }}
+          body: |
+            ### Changes
+            ${{ steps.notes.outputs.body }}
+          files: |
+            ./dist/StreamNook.exe
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

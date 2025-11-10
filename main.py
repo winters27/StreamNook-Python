@@ -17,6 +17,7 @@ import atexit
 from pathlib import Path
 from functools import lru_cache
 from contextlib import contextmanager
+from toast import ToastManager
 
 import psutil
 import ctypes
@@ -40,7 +41,7 @@ from discord_presence import DiscordPresenceClient
 
 
 # ============================================================================
-# Thread Pool Management - Improved with proper shutdown
+# Thread Pool Management
 # ============================================================================
 class ManagedThreadPool:
     """Context manager for thread pools to ensure proper cleanup"""
@@ -69,7 +70,7 @@ LIVE_STREAM_LOAD_POOL = ManagedThreadPool(max_workers=1, name="LiveStream")
 def cleanup_thread_pools():
     """Cleanup all thread pools on application exit"""
     for pool in [TWITCH_LOGIN_POOL, IMAGE_LOAD_POOL, EMOTE_LOAD_POOL, LIVE_STREAM_LOAD_POOL]:
-        pool.shutdown(wait=False)
+        pool.shutdown(wait=True)
 
 atexit.register(cleanup_thread_pools)
 
@@ -125,7 +126,7 @@ SETTINGS_FILE = APP_DIR / "settings.json"
 
 
 # ============================================================================
-# Discord "detectable app" cache - Improved with better expiry handling
+# Discord "detectable app" cache
 # ============================================================================
 _DETECTABLE_CACHE = APP_DIR / "discord_detectables_cache.json"
 _CACHE_EXPIRY_SECONDS = 12 * 3600  # 12 hours
@@ -243,7 +244,7 @@ SPLITTER_HANDLE_PX = 2
 
 
 # ============================================================================
-# Settings management - Improved error handling
+# Settings management
 # ============================================================================
 def load_settings() -> dict:
     """Load settings with proper error handling and validation"""
@@ -1651,16 +1652,12 @@ class SettingsOverlay(QtWidgets.QWidget):
 class MenuBar(QtWidgets.QWidget):
     play_stream_signal = QtCore.Signal(str)
     toggle_sidebar_signal = QtCore.Signal()
-    emote_loaded_signal = QtCore.Signal(bytes)  # New signal for emote data
 
     def __init__(self, parent):
         super().__init__(parent)
         self.main_window = parent
         self.setFixedHeight(40)
         self.setObjectName("MenuBar")
-
-        # Connect emote loaded signal to slot
-        self.emote_loaded_signal.connect(self._on_emote_loaded)
 
         layout = QtWidgets.QHBoxLayout(self)
         layout.setContentsMargins(0, 0, -8, 0)
@@ -2045,17 +2042,18 @@ class MenuBar(QtWidgets.QWidget):
         self.main_window.open_settings()
 
     def show_loading_indicator(self, channel_name: str):
-        """Show loading indicator with animated emote and channel name"""
-        self.loading_label.setText(f"Loading {channel_name}'s stream...")
-        self.loading_container.setVisible(True)
-
-        # Load a random emote from the loading widget's trending emotes
+        """Show loading toast notification with animated emote"""
+        # Get a random emote from the loading widget's trending emotes
         if hasattr(self.main_window, 'loading_widget') and self.main_window.loading_widget.trending_emotes:
             emote_url = random.choice(self.main_window.loading_widget.trending_emotes)
-            self._load_emote_async(emote_url)
+            # Load emote asynchronously and update toast
+            self._load_emote_for_toast(emote_url, channel_name)
+        else:
+            # Show toast without emote
+            self.main_window.toast_manager.show_loading(f"Switching to {channel_name}...")
 
-    def _load_emote_async(self, url: str):
-        """Load emote in background thread"""
+    def _load_emote_for_toast(self, url: str, channel_name: str):
+        """Load emote in background thread for toast"""
         def load_task():
             try:
                 req = urllib.request.Request(url, headers=_UA)
@@ -2064,43 +2062,25 @@ class MenuBar(QtWidgets.QWidget):
             except Exception:
                 return None
 
+        # Show toast first without emote
+        loading_toast = self.main_window.toast_manager.show_loading(f"Switching to {channel_name}...")
+        
+        # Then load emote and update toast
         future = EMOTE_LOAD_POOL.submit(load_task)
-        future.add_done_callback(lambda f: self._emit_emote_loaded(f.result()))
-
-    def _emit_emote_loaded(self, data: bytes):
-        """Emit signal with loaded data (called from background thread)"""
-        if data:
-            self.emote_loaded_signal.emit(data)
-
-    @QtCore.Slot(bytes)
-    def _on_emote_loaded(self, data: bytes):
-        """Handle loaded emote data on main thread"""
-        if data and self.loading_container.isVisible():
-            # Load emote for right side only
-            self.loading_movie_right.stop()
-
-            # Clean up old buffer
-            if self.loading_buffer_right:
-                self.loading_buffer_right.close()
-
-            # Create QBuffer for right emote
-            self.loading_buffer_right = QtCore.QBuffer()
-            self.loading_buffer_right.setData(QtCore.QByteArray(data))
-            self.loading_buffer_right.open(QtCore.QIODevice.ReadOnly)
-            self.loading_movie_right.setDevice(self.loading_buffer_right)
-            self.loading_movie_right.start()
-
+        
+        def on_emote_loaded(fut):
+            try:
+                data = fut.result()
+                if data and loading_toast and loading_toast.isVisible():
+                    loading_toast.set_emote_data(data)
+            except:
+                pass
+        
+        future.add_done_callback(on_emote_loaded)
 
     def hide_loading_indicator(self):
-        """Hide loading indicator"""
-        self.loading_container.setVisible(False)
-        self.loading_label.setText("")
-        self.loading_movie_right.stop()
-
-        # Clean up buffer
-        if hasattr(self, 'loading_buffer_right') and self.loading_buffer_right:
-            self.loading_buffer_right.close()
-            self.loading_buffer_right = None
+        """Hide loading toast notification"""
+        self.main_window.toast_manager.hide_loading()
 
     def toggle_search_bar(self):
         if self.search_input.isVisible():
@@ -2140,6 +2120,9 @@ class MainWindow(QtWidgets.QMainWindow):
         # Initialize log buffer and window before any calls to _log
         self._log_buffer = []
         self.log_win: LogWindow | None = None
+        
+        # Initialize toast notification manager
+        self.toast_manager = ToastManager(self)
 
         self.current_twitch_account = None # Stores the currently active Twitch account details
         self._load_current_twitch_account() # Load current account on startup
@@ -2435,35 +2418,49 @@ class MainWindow(QtWidgets.QMainWindow):
         QtCore.QTimer.singleShot(0, container.fit_child)
         self.loading_widget.stop()
 
-        # Hide loading indicator in title bar
         self.menu_bar.hide_loading_indicator()
 
     def launch_and_embed_chatterino(self, channel_name: str = None):
-        path = self.settings.get("chatterino_path") or ""
-        if not path or not Path(path).exists():
-            self._log("Set a valid Chatterino path in Settings.")
-            return
-        if self.proc_chatterino:
-            try:
-                self.proc_chatterino.terminate()
-                self.proc_chatterino.wait(timeout=5)
-            except Exception as e: self._log(f"Error terminating existing Chatterino: {e}")
-            self.proc_chatterino = None
-            self.chatterino_hwnd = 0
-            if self.ch_container: self.ch_container.setParent(None); self.ch_container = None
-        self.detach_chatterino()
-        cmd = [path]
-        if channel_name: cmd.extend(["--channels", f"t:{channel_name}"])
-        try: self.proc_chatterino = subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
-        except Exception as e: self._log(f"Failed to launch Chatterino: {e}"); return
-        hwnd = 0
-        for _ in range(50):
-            time.sleep(0.1)
-            if self.proc_chatterino.poll() is not None: break
-            hwnd = find_main_window_for_pid(self.proc_chatterino.pid)
-            if hwnd: break
-        if hwnd: self.embed_chatterino_hwnd(hwnd)
-        else: self._log("Could not find Chatterino window.")
+            path = self.settings.get("chatterino_path") or ""
+            if not path or not Path(path).exists():
+                self._log("Set a valid Chatterino path in Settings.")
+                return
+            
+            if self.proc_chatterino:
+                try:
+                    if self.proc_chatterino.poll() is None: # Check if it's running
+                        self._log("Terminating existing Chatterino...")
+                        self.proc_chatterino.terminate()
+                        self.proc_chatterino.wait(timeout=5)
+                except Exception as e: 
+                    self._log(f"Error terminating existing Chatterino: {e}")
+                
+                if self.proc_chatterino and self.proc_chatterino.poll() is None:
+                    self._log("Chatterino did not terminate, killing...")
+                    try:
+                        self.proc_chatterino.kill()
+                        self.proc_chatterino.wait(timeout=2)
+                    except Exception as e:
+                        self._log(f"Error killing Chatterino: {e}")
+
+                self.proc_chatterino = None
+                self.chatterino_hwnd = 0
+                if self.ch_container: self.ch_container.setParent(None); self.ch_container = None
+            
+            self.detach_chatterino()
+            cmd = [path]
+            if channel_name: cmd.extend(["--channels", f"t:{channel_name}"])
+            try: self.proc_chatterino = subprocess.Popen(cmd, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+            except Exception as e: self._log(f"Failed to launch Chatterino: {e}"); return
+            
+            hwnd = 0
+            for _ in range(50):
+                time.sleep(0.1)
+                if self.proc_chatterino.poll() is not None: break
+                hwnd = find_main_window_for_pid(self.proc_chatterino.pid)
+                if hwnd: break
+            if hwnd: self.embed_chatterino_hwnd(hwnd)
+            else: self._log("Could not find Chatterino window.")
 
     def embed_chatterino_hwnd(self, hwnd: int):
         while self.chat_layout.count():
@@ -2671,7 +2668,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def login_with_twitch(self):
         cid = TWITCH_CLIENT_ID
         if not cid:
-            QtWidgets.QMessageBox.information(self, "Client-ID needed", "Twitch Client-ID is missing.")
+            self.toast_manager.show_error("Twitch Client-ID is missing.")
             return
 
         self.loading_widget.start("Sign in with Twitch (Device Code)...")
@@ -2686,11 +2683,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 webbrowser.open(verification_uri)
             except Exception:
                 pass
-            QtWidgets.QMessageBox.information(
-                self,
-                "Twitch Login",
-                f"Open:\n  {verification_uri}\n\nEnter this code:\n  {user_code}\n\n"
-                f"(Code expires in ~{max(1, int(expires_in/60))} minutes.)",
+            self.toast_manager.show_info(
+                f"Twitch activation: Enter code {user_code} at the opened page",
+                duration=6000
             )
             if hasattr(self, "_log"):
                 self._log(f"Twitch device login: user_code={user_code}, url={verification_uri}")
@@ -2788,14 +2783,14 @@ class MainWindow(QtWidgets.QMainWindow):
         save_settings(self.settings)
         self._load_current_twitch_account()
         self.menu_bar.update_twitch_button_icon(profile_image_url, user_id)
-        QtWidgets.QMessageBox.information(self, "Twitch", f"Login successful for {display_name or username}.")
+        self.toast_manager.show_success(f"Login successful for {display_name or username}!")
         self.loading_widget.stop()
         self.player_stack.setCurrentWidget(self.mpv_placeholder)
         self.twitch_login_completed.emit()
 
     @QtCore.Slot(str)
     def _handle_twitch_login_failure(self, error_message: str):
-        QtWidgets.QMessageBox.warning(self, "Twitch", error_message)
+        self.toast_manager.show_error(error_message)
         self.loading_widget.stop()
         self.player_stack.setCurrentWidget(self.mpv_placeholder)
 
@@ -2810,7 +2805,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def show_live_overlay(self):
         cid, tok = self._get_current_twitch_credentials()
         if not tok:
-            QtWidgets.QMessageBox.information(self, "Twitch Login Required", "Please login to Twitch first.")
+            self.toast_manager.show_warning("Please login to Twitch first.")
             return
 
         self.loading_widget.start("Loading live streams...")
@@ -2833,7 +2828,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.loading_widget.stop()
 
         if not streams:
-            QtWidgets.QMessageBox.information(self, "No Live Streams", "None of your followed channels are currently live.")
+            self.toast_manager.show_info("None of your followed channels are currently live.")
             if self.mpv_hwnd == 0:
                 self.player_stack.setCurrentWidget(self.mpv_placeholder)
             return
@@ -2920,19 +2915,105 @@ class MainWindow(QtWidgets.QMainWindow):
         return None
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
-        """
-        Mark we are closing and stop background threads cleanly before destruction.
-        """
-        self._closing = True
-        try:
-            if hasattr(self, "stop_discord_client"):
-                self.stop_discord_client()
-            if self.discord_thread.isRunning():
-                self._log("[Discord] Initiating graceful shutdown of Discord RPC thread.")
-                self.disconnect_discord_signal.emit()
-        except Exception as e:
-            self._log(f"Error during Discord client shutdown in closeEvent: {e}")
-        super().closeEvent(event)
+            """
+            Mark we are closing and stop background threads cleanly before destruction.
+            """
+            self._closing = True
+            
+            loading_toast = None # Define toast outside of try block
+            
+            try:
+                # --- MODIFIED SHUTDOWN TOAST LOGIC ---
+                
+                # 1. Manually create the LoadingToast
+                # We bypass the manager to control the showing without animation
+                loading_toast = LoadingToast("Shutting down...", self)
+                
+                # 2. Get its final position (from toast.py logic)
+                margin = 20
+                parent_height = self.geometry().height()
+                end_x = margin
+                # We use the toast's height, so we must let Qt calculate it first
+                if hasattr(loading_toast, "height"):
+                    toast_height = loading_toast.height()
+                else:
+                    toast_height = 90 # Fallback to max height
+                
+                y_pos = parent_height - toast_height - margin
+                global_end = self.mapToGlobal(QtCore.QPoint(end_x, y_pos))
+
+                # 3. Move it DIRECTLY to its final position (no animation)
+                loading_toast.move(global_end)
+
+                # 4. Load emote data (synchronously, short timeout)
+                emote_url = "https://cdn.7tv.app/emote/01HDPKA22G0003DSKWRRPR1DC1/3x.avif"
+                emote_data = None
+                try:
+                    req = urllib.request.Request(emote_url, headers=_UA)
+                    with urllib.request.urlopen(req, timeout=1) as r:
+                        emote_data = r.read()
+                except Exception:
+                    pass # Ignore if download fails
+
+                if emote_data:
+                    loading_toast.set_emote_data(emote_data)
+                
+                # 5. Show the toast
+                # This just schedules the show/paint events
+                loading_toast.show()
+                loading_toast.raise_()
+                
+                # 6. Force the event loop to process the show/paint events
+                app = QtWidgets.QApplication.instance()
+                if app:
+                    app.processEvents()
+                    
+                # --- END OF MODIFIED SECTION ---
+                    
+            except Exception as e:
+                # Log the error, but continue shutdown
+                self._log(f"Error showing shutdown toast: {e}")
+
+            self._log("Shutting down external processes...")
+            
+            # Terminate MPV
+            if self.proc_mpv and self.proc_mpv.poll() is None:
+                try:
+                    self._log("Terminating mpv...")
+                    self.proc_mpv.terminate()
+                    self.proc_mpv.wait(timeout=3)
+                except Exception as e:
+                    self._log(f"Error terminating mpv: {e}")
+                    if self.proc_mpv.poll() is None:
+                        self._log("mpv did not terminate, killing...")
+                        self.proc_mpv.kill() # Force kill
+            
+            # Terminate Chatterino
+            if self.proc_chatterino and self.proc_chatterino.poll() is None:
+                try:
+                    self._log("Terminating Chatterino...")
+                    self.proc_chatterino.terminate()
+                    self.proc_chatterino.wait(timeout=3)
+                except Exception as e:
+                    self._log(f"Error terminating Chatterino: {e}")
+                    if self.proc_chatterino.poll() is None:
+                        self.proc_chatterino.kill() # Force kill
+            
+            try:
+                if hasattr(self, "stop_discord_client"):
+                    self.stop_discord_client()
+                if self.discord_thread.isRunning():
+                    self._log("[Discord] Initiating graceful shutdown of Discord RPC thread.")
+                    self.disconnect_discord_signal.emit()
+            except Exception as e:
+                self._log(f"Error during Discord client shutdown in closeEvent: {e}")
+            
+            # Clean up the toast we created, just in case
+            if loading_toast:
+                loading_toast.hide()
+                loading_toast.deleteLater()
+
+            super().closeEvent(event)
 
 
     def start_discord_client(self):
