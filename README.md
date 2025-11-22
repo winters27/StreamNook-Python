@@ -1,3 +1,12 @@
+> [!IMPORTANT]
+> # 🚀 STREAM NOOK HAS EVOLVED
+> **This repository is now LEGACY.** >
+> We have completely rebuilt Stream Nook in **Rust** for blazing fast performance and a standalone experience (no more complex dependency installers!).
+>
+> **Check out the new version here:** [github.com/winters27/StreamNook](https://github.com/winters27/StreamNook)
+
+
+
 <p align="center">
   <img src="images/logo.png" alt="Stream Nook Logo" width="200"/>
 </p>
